@@ -4,10 +4,9 @@ Takafumi Hoiruchi. 2018.
 https://github.com/takafumihoriuchi/MNIST_for_C
 */
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
 
@@ -16,6 +15,7 @@ https://github.com/takafumihoriuchi/MNIST_for_C
 #define MNIST_LEN_INFO_IMAGE 4
 #define MNIST_LEN_INFO_LABEL 2
 #define THRESHOLD 0.3
+#define MAX_FILENAME 256
 
 void FlipLong(unsigned char * ptr)
 {
@@ -129,4 +129,30 @@ void freeImages(bool*** images,int number, int size){
         freeImage(images[i],size);
     }
     free(images);
+}
+
+void saveImage(bool ** image, int size, char name[]){
+    char file_name[MAX_FILENAME];
+    FILE *fp;
+    int x, y;
+
+    if (name[0] == '\0') {
+        printf("output file name (*.pgm) : ");
+        scanf("%s", file_name);
+    } else strcpy(file_name, name);
+
+    if ( (fp=fopen(file_name, "wb"))==NULL ) {
+        printf("could not open file\n");
+        exit(1);
+    }
+
+    fputs("P5\n", fp);
+    fputs("# Created by Image Processing\n", fp);
+    fprintf(fp, "%d %d\n", size, size);
+    fprintf(fp, "%d\n", 255);
+    for (y=0; y<size; y++)
+        for (x=0; x<size; x++)
+            fputc(image[y][x] ? 0: 255, fp);
+    fclose(fp);
+    printf("Image was saved successfully\n");
 }

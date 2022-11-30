@@ -1,5 +1,4 @@
 
-#include <stdio.h>
 
 typedef enum KernelType {
     pooling, mustTMustFEither, weighted

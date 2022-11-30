@@ -1,5 +1,9 @@
+
+#include <stdio.h>
+
 #include "my_mnist.h"
 #include "convolution.h"
+#include "bayesianNetwork.h"
 
 #define TRAINING_SIZE 2
 
@@ -8,12 +12,20 @@ int main(void){
     srand(17);
 
     if (true){
+
+        BayesianNetwork bn = createBayesianNetwork(28,1);
+        resetBayesianNetwork(bn);
+        freeBayesianNetwork(bn);
+
+    }
+
+    if (false){
         bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
 
         // print pixels of first data in test dataset
         printImage(images[0], 28);
         //Kernel k = createKernel(2,2,weighted,1,true);
-        Kernel k = createKernel(4,2,pooling,1,false);
+        Kernel k = createKernel(2,2,pooling,1,false);
 
         int sizeAfter = sizeAfterConvolution(28,k);
         printf("Size after convolution is %d \n", sizeAfter);
@@ -24,6 +36,8 @@ int main(void){
         printKernel(k);
         printImage(convolvedLayers[0], sizeAfter);
         printImage(convolvedLayers[1], sizeAfter);
+
+        saveImage(convolvedLayers[0], sizeAfter, "test");
 
         freeKernel(k);
         freeImages(convolvedLayers, 2, sizeAfter );
@@ -63,6 +77,5 @@ int main(void){
             }
         } 
     }
-
     return 0;
 }  
