@@ -5,17 +5,49 @@
 #include "convolution.h"
 #include "bayesianNetwork.h"
 
-#define TRAINING_SIZE 2
+#define TRAINING_SIZE 60000
 
 int main(void){
 
-    srand(17);
+    srand(42);
 
     if (true){
 
-        BayesianNetwork bn = createBayesianNetwork(28,1);
-        resetBayesianNetwork(bn);
+        printf("Loading data...");
+        bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
+        printf("Done!\n");
+
+        Kernel k1 = createKernel(2,1,weighted,1,false);
+        Kernel k2 = createKernel(2,1,weighted,1,false);
+        Kernel k3 = createKernel(2,1,weighted,1,false);
+        int sizeAfter = sizeAfterConvolution(28,k1);
+
+        bool **** dataLayer2 = malloc(sizeof(bool***) * TRAINING_SIZE);
+
+        #pragma omp parallel for
+        for (int i = 0; i < TRAINING_SIZE; i++){
+            dataLayer2[i] = malloc(sizeof(bool**) * 3);
+            
+            dataLayer2[i][0] = applyConvolution(images,28, k1);
+            dataLayer2[i][1] = applyConvolution(images,28, k2);
+            dataLayer2[i][2] = applyConvolution(images,28, k3);
+        }
+
+        BayesianNetwork bn = createBayesianNetwork(sizeAfter,3);
+
+        addAllDependencies(bn);
+
+        printf("About to fit counts\n");
+        fitDataCounts(bn,dataLayer2,TRAINING_SIZE);
+        printf("Done\n");
+
+
+        freeKernel(k1); freeKernel(k2); freeKernel(k3);
         freeBayesianNetwork(bn);
+        freeImages(images, TRAINING_SIZE,28);
+        freeLayeredImages(dataLayer2, TRAINING_SIZE,3,sizeAfter );
+
+        printf("Done and freed everything\n");
 
     }
 

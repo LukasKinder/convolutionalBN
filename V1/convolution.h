@@ -261,6 +261,5 @@ bool ** applyConvolution(bool*** data, int data_size, Kernel kernel){
             }
         }
     }
-    printf("END\n");
     return new_data;
 }

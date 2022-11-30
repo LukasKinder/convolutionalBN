@@ -1,8 +1,15 @@
 
-typedef struct Node Node;
+#include <math.h>
 
-typedef struct Node {
+typedef struct RawNode *Node;
+
+typedef struct RawNode {
     bool value;
+
+    //position within bn grid
+    int x;
+    int y;
+    int depth;
 
     Node* parents;
     Node* children;
@@ -13,7 +20,7 @@ typedef struct Node {
     int* stateCountsFalse; // maps parent configuration as index (binary number) to counts to be false
     bool* CPT; // maps parent configuration as index (binary number) to probability to be true
   
-}Node;
+}RawNode;
 
 typedef struct BayesianNetwork {
     Node*** nodes; //nodes within the x,y,depth grid
@@ -21,13 +28,18 @@ typedef struct BayesianNetwork {
     int depth; //size in terms of depth
 }BayesianNetwork;
 
-Node initNode(){
-    Node n;
-    n.parents = NULL;
-    n.children = NULL;
-    n.stateCountsTrue = NULL;
-    n.stateCountsFalse = NULL;
-    n.CPT = NULL;
+Node initNode(int depth, int x, int y){
+    Node n = malloc(sizeof(RawNode));
+    n->parents = NULL;
+    n->children = NULL;
+    n->stateCountsTrue = NULL;
+    n->stateCountsFalse = NULL;
+    n->CPT = NULL;
+    n->depth = depth;
+    n->x = x;
+    n->y = y;
+    n->n_parents = 0;
+    n->n_children = 0;
     return n; 
 }
 
@@ -42,22 +54,127 @@ BayesianNetwork createBayesianNetwork(int size, int depth){
         for (j = 0; j < size; j++){
             bn.nodes[i][j] = malloc(sizeof(Node) * size);
             for (k = 0; k < size; k++){
-                bn.nodes[i][j][k] = initNode();
+                bn.nodes[i][j][k] = initNode(i,j,k);
             }
-
         }
     }
     return bn;
 }
 
+//
+void addAllDependencies(BayesianNetwork bn){
+    int d,d2,x,y,x_relation,y_relation;
+    Node n1,n2;
 
-// fir the data by determining parents for each node and using counts for each node
-void fitData(bool uniformParents, int neighbourDistance ){
+    for (d = 0; d < bn.depth; d++){
+        for (x = 0; x < bn.size; x++){
+            for (y = 0; y < bn.size; y++){
+                n1 = bn.nodes[d][x][y];
+                if (n1->parents == NULL){
+                    n1->parents = malloc(sizeof(Node) * 4 * bn.depth);
+                }
+                if (n1->children == NULL){
+                    n1->children = malloc(sizeof(Node) * 4 * bn.depth);
+                }
+                n1->n_children = 0;
+                n1->n_parents = 0;
+            }
+        }
+    }
+
+    for (d = 0; d < bn.depth; d++){
+        for (x = 0; x < bn.size; x++){
+            for (y = 0; y < bn.size; y++){
+                n1 = bn.nodes[d][x][y];
+                for (x_relation = x-1; x_relation <= x+1; x_relation++){
+                    if (x_relation < bn.size || x_relation >= bn.size){
+                        continue;
+                    }
+                    for (y_relation = y-1; y_relation <= y+1; y_relation++){
+                        if (y_relation < bn.size || y_relation >= bn.size){
+                            continue;
+                        }
+
+                        if (y_relation < y || (y_relation == 0 && x_relation < x )){
+                            //n2 is a parents of n1 and  n1 is a child of n2
+                            for  (d2 = 0; d2 < bn.depth; d2++){
+                                n2 = bn.nodes[d2][x_relation][y_relation];
+                                n1->parents[n1->n_parents] = n2;
+                                n1->n_parents++;
+                                n2->children[n2->n_children] = n1;
+                                n2->n_children++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+int binaryToInt(bool* binaryNumber, int size){
+    int result = 0;
+    for (int i = 0; i < size; i++){
+        result = result*2 + (binaryNumber[i] ? 1 : 0);
+    }
+    return result;
+}
+
+// fit the data (in terms of counts), assumes that parents relations are already known
+void fitDataCounts(BayesianNetwork bn, bool **** data, int data_instances){
+
+    int i,d,x,y,j;
+    Node n;
+
+    printf("A\n");
+
+    //init counting arrays
+    for (d = 0; d < bn.depth; d++){
+        for (x = 0; x < bn.size; x++){
+            for (y = 0; y < bn.size; y++){
+                n = bn.nodes[d][x][y];
+                n->stateCountsTrue = malloc(sizeof(int) * (int)(pow(2,n->n_parents)));
+                n->stateCountsFalse = malloc(sizeof(int) * (int)(pow(2,n->n_parents)));   
+                for (int i = 0; i < pow(2,n->n_parents); i++){
+                    n->stateCountsTrue[i] = 0;
+                    n->stateCountsFalse[i] = 0;
+                }
+            }
+        }
+    }
+
+    printf("B\n");
+
+    #pragma omp parallel for collapse(3)
+    for (d = 0; d < bn.depth; d++){
+        for (x = 0; x < bn.size; x++){
+            for (y = 0; y < bn.size; y++){
+
+                Node n,parentNode;
+                bool *parentCombination = malloc(sizeof(bool) * 4 * bn.depth);
+                n = bn.nodes[d][x][y];
+
+                for (int i = 0; i < data_instances; i++){
+                    for (int j = 0; j < n->n_parents; j++ ){
+                        parentNode = n->parents[j];
+                        parentCombination[j] = data[i][parentNode->depth][parentNode->x][parentNode->y];
+                    }
+                    if (data[i][d][x][y]){
+                        n->stateCountsTrue[ binaryToInt(parentCombination,n->n_parents)]++;
+                    }else{
+                        n->stateCountsFalse[ binaryToInt(parentCombination,n->n_parents)]++;
+                    }
+                }
+                free(parentCombination);
+            }
+        }
+    }
+    printf("C\n");
 
 }
 
 // determining the CPTs by using the counts and laplaceCorrelation / smooting
-void learnCPTs( bool cpt_smoothing, float** smoothing_kernel, int kernel_size, float pseudoCounts){
+void learnCPTs(float pseudoCounts, bool cpt_smoothing, float** smoothing_kernel, int kernel_size){
 
 
 }
@@ -70,22 +187,24 @@ void resetBayesianNetwork(BayesianNetwork bn){
         for (j = 0; j < bn.size; j++){
             for (k = 0; k < bn.size; k++){
                 n = bn.nodes[i][j][k];
-
-                if (n.parents != NULL) free(n.parents);
-                if (n.children != NULL) free(n.children);
-                if (n.stateCountsTrue != NULL) free(n.stateCountsTrue);
-                if (n.stateCountsFalse != NULL) free(n.stateCountsFalse);
-                if (n.CPT != NULL) free(n.CPT);
+                if (n->parents != NULL) free(n->parents);
+                if (n->children != NULL) free(n->children);
+                if (n->stateCountsTrue != NULL) free(n->stateCountsTrue);
+                if (n->stateCountsFalse != NULL) free(n->stateCountsFalse);
+                if (n->CPT != NULL) free(n->CPT);
             }
         }
     }
 }
 
 void freeBayesianNetwork(BayesianNetwork bn){
-    int i,j;
+    int i,j,k;
     resetBayesianNetwork(bn);
     for (i = 0; i < bn.depth; i++){
         for (j = 0; j < bn.size; j++){
+            for (k = 0; k < bn.size; k++){
+                free(bn.nodes[i][j][k]);
+            }
             free(bn.nodes[i][j]);
         }
         free(bn.nodes[i]);

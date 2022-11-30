@@ -131,6 +131,14 @@ void freeImages(bool*** images,int number, int size){
     free(images);
 }
 
+void freeLayeredImages(bool**** layeredData, int data_size, int depth, int size){
+    for (int i = 0; i < data_size; i++){
+        freeImages(layeredData[i],depth,size);
+    }
+
+    free(layeredData);
+}
+
 void saveImage(bool ** image, int size, char name[]){
     char file_name[MAX_FILENAME];
     FILE *fp;
