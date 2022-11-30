@@ -11,6 +11,8 @@ https://github.com/takafumihoriuchi/MNIST_for_C
 #include <string.h>
 #include <stdbool.h>
 
+
+
 #define MNIST_LEN_INFO_IMAGE 4
 #define MNIST_LEN_INFO_LABEL 2
 #define THRESHOLD 0.3

@@ -7,24 +7,26 @@ int main(void){
 
     srand(17);
 
-    if (false){
+    if (true){
         bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
 
         // print pixels of first data in test dataset
         printImage(images[0], 28);
         //Kernel k = createKernel(2,2,weighted,1,true);
-        Kernel k = createKernel(2,2,mustTMustFEither,1,true);
+        Kernel k = createKernel(4,2,pooling,1,false);
 
         int sizeAfter = sizeAfterConvolution(28,k);
         printf("Size after convolution is %d \n", sizeAfter);
 
+        //bool** convolvedImage = applyConvolution(images,28, k);
+        bool*** convolvedLayers = applyMaxPooling(images,28,k);
 
-        bool** convolvedImage = applyConvolution(images,28, k);
         printKernel(k);
-        printImage(convolvedImage, sizeAfter);
+        printImage(convolvedLayers[0], sizeAfter);
+        printImage(convolvedLayers[1], sizeAfter);
 
         freeKernel(k);
-        freeImage(convolvedImage, sizeAfter );
+        freeImages(convolvedLayers, 2, sizeAfter );
         freeImages(images, TRAINING_SIZE,28);
     }
 

@@ -149,6 +149,49 @@ int sizeAfterConvolution(int originalSize, Kernel kernel){
 }
 
 
+bool *** applyMaxPooling(bool ***data, int data_size, Kernel kernel){
+    if (kernel.type != pooling){
+        printf("wrong type of kernel for pooling");
+    }
+
+    int newSize = sizeAfterConvolution(data_size,kernel);
+    int d,x,y,i,j,responseX,responseY;
+    bool isFalse;
+
+    bool *** newData = malloc(sizeof(bool **) * kernel.depth);
+    for (i = 0; i < kernel.depth; i++){
+        newData[i] = malloc(sizeof(bool*) * newSize);
+        for (j = 0; j < newSize; j++){
+            newData[i][j] = malloc(sizeof(bool) * newSize);
+        }
+    }
+
+    for (d = 0; d < kernel.depth; d++){
+        for (x = 0; x < newSize; x++){
+            for (y = 0; y < newSize; y++){
+
+                responseX = x * kernel.stride - (kernel.padding ? kernel.size -1: 0);
+                responseY = y * kernel.stride - (kernel.padding ? kernel.size -1: 0);
+
+                bool isFalse = false;
+                for (i = responseX; i < responseX +  kernel.size; i++){
+                    for (j = responseY; j < responseY + kernel.size; j++){
+
+                        if (i < 0 || j < 0 || i>=data_size || j >= data_size){
+                            continue;; //out of bound because of padding
+                        } else {
+                            isFalse = isFalse || data[d][i][j];
+                        }
+                    }
+                }
+                newData[d][x][y] = isFalse;
+            }
+        }
+    }
+    return newData;
+}
+
+
 //applies convolution with weighted or mustTmustFE kernel
 bool ** applyConvolution(bool*** data, int data_size, Kernel kernel){
 
