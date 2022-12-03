@@ -86,6 +86,16 @@ void printNode(Node n, bool printTables){
     }
 }
 
+void setStateToData(BayesianNetwork bn, bool *** data){
+    for (int d = 0; d < bn->depth; d++){
+        for (int x = 0; x < bn->size;x++){
+            for (int y = 0; y < bn->size;y++){
+                bn->nodes[d][x][y]->value = data[d][x][y];
+            }
+        }
+    }
+}
+
 BayesianNetwork createBayesianNetwork(int size, int depth){
     BayesianNetwork bn = malloc(sizeof(RawBayesianNetwork));
     bn->size = size;
@@ -197,8 +207,8 @@ void fitDataCounts(BayesianNetwork bn, bool **** data, int data_instances){
             for (y = 0; y < bn->size; y++){
 
                 Node n,parentNode;
-                bool *parentCombination = malloc(sizeof(bool) * 4 * bn->depth);
                 n = bn->nodes[d][x][y];
+                bool *parentCombination = malloc(sizeof(bool) * n->n_parents);
 
                 for (int i = 0; i < data_instances; i++){
                     for (int j = 0; j < n->n_parents; j++ ){

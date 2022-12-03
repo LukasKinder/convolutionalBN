@@ -5,6 +5,7 @@
 #include "convolution.h"
 #include "bayesianNetwork.h"
 #include "convolutionalBayesianNetwork.h"
+#include "inference.h"
 
 #define TRAINING_SIZE 10000
 
@@ -12,7 +13,121 @@ int main(void){
 
     srand(42);
 
+    if (false){
+        printf("Loading data...");
+        bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
+        printf("Done!\n");
+        bool **** layeredImages;
+        layeredImages = malloc(sizeof(bool ***) * TRAINING_SIZE);
+        for (int i =0; i < TRAINING_SIZE; i++){
+            layeredImages[i] = malloc(sizeof(bool**)*1);
+            layeredImages[i][0] = images[i]; 
+        }
+        free(images);
+
+        Kernel k1 = createKernel(2,1,mustTMustFEither,1,false);
+        Kernel k2 = createKernel(2,1,mustTMustFEither,1,false);
+        Kernel k3 = createKernel(2,1,mustTMustFEither,1,false);
+
+        k1.map[0][0][0] = must_true;  k1.map[0][0][1] = either; 
+        k1.map[0][1][0] = must_false; k1.map[0][1][1] = either; 
+
+        k2.map[0][0][0] = must_true;  k2.map[0][0][1] = must_false; 
+        k2.map[0][1][0] = either; k2.map[0][1][1] = either; 
+
+        k3.map[0][0][0] = must_false;  k3.map[0][0][1] = must_false; 
+        k3.map[0][1][0] = must_false; k3.map[0][1][1] = must_false; 
+
+        Kernel *kernel_array = malloc(sizeof(Kernel) * 3);
+        kernel_array[0] = k1; kernel_array[1] = k2;  kernel_array[2] = k3; 
+
+        Kernel ** kernel_arrays = malloc(sizeof(Kernel * ) * 1);
+        kernel_arrays[0] = kernel_array;
+
+        int *n_kernels = malloc(sizeof(int) * 1);
+        n_kernels[0] = 3;
+
+        Kernel poolingKernel = createKernel(2,3,pooling,1,false);
+        Kernel * pooling_kernels = malloc(sizeof(Kernel) * 1);
+        pooling_kernels[0] = poolingKernel;
+
+        printf("learning cbn\n");
+        ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(2,n_kernels,kernel_arrays,pooling_kernels);
+        learnLayer(cbn,0,layeredImages,TRAINING_SIZE,28,1,false,false,true);
+        learnLayer(cbn,1,layeredImages,TRAINING_SIZE,28,3,false,false,false); //neighbour distance to avoide overlapping responsive filters
+
+        fitCPTs(cbn->bayesianNetworks[0],1,false,NULL,0);
+        fitCPTs(cbn->bayesianNetworks[1],1,false,NULL,0);
+        printf("finished learning cbn\n");
+
+        int n_gibbs_samples = 10;
+
+        setStateToImage(cbn,layeredImages[4]);
+        //setToRandomState(cbn,0.7);
+        
+        printf("starting gibbs sampling\n");
+        bool *** gibbs_samples = gibbsSampling(cbn,n_gibbs_samples,6000);
+        printf("starting gibbs sampling\n");
+
+        saveImage(gibbs_samples[0],28,"sample0");
+        saveImage(gibbs_samples[1],28,"sample1");
+        saveImage(gibbs_samples[2],28,"sample2");
+        saveImage(gibbs_samples[3],28,"sample3");
+        saveImage(gibbs_samples[4],28,"sample4");
+        saveImage(gibbs_samples[5],28,"sample5");
+        saveImage(gibbs_samples[6],28,"sample6");
+        saveImage(gibbs_samples[7],28,"sample7");
+        saveImage(gibbs_samples[8],28,"sample8");
+        saveImage(gibbs_samples[9],28,"sample9");
+
+        freeImages(gibbs_samples,n_gibbs_samples,28);
+        freeConvolutionalBayesianNetwork(cbn);
+        freeLayeredImages(layeredImages,TRAINING_SIZE,1,28);
+
+    }
+
     if (true){
+
+        printf("Loading data...");
+        bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
+        printf("Done!\n");
+        bool **** layeredImages;
+        layeredImages = malloc(sizeof(bool ***) * TRAINING_SIZE);
+        for (int i =0; i < TRAINING_SIZE; i++){
+            layeredImages[i] = malloc(sizeof(bool**)*1);
+            layeredImages[i][0] = images[i]; 
+        }
+        free(images);
+
+        ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(1,NULL,NULL,NULL);
+
+
+        learnLayer(cbn,0,layeredImages,TRAINING_SIZE,28,1,false,false,true);
+        fitCPTs(cbn->bayesianNetworks[0],1,false,NULL,0);
+
+        int n_gibbs_samples = 10;
+
+        setStateToImage(cbn,layeredImages[2]);
+        bool *** gibbs_samples = gibbsSampling(cbn,n_gibbs_samples,6000);
+
+        saveImage(gibbs_samples[0],28,"sample0");
+        saveImage(gibbs_samples[1],28,"sample1");
+        saveImage(gibbs_samples[2],28,"sample2");
+        saveImage(gibbs_samples[3],28,"sample3");
+        saveImage(gibbs_samples[4],28,"sample4");
+        saveImage(gibbs_samples[5],28,"sample5");
+        saveImage(gibbs_samples[6],28,"sample6");
+        saveImage(gibbs_samples[7],28,"sample7");
+        saveImage(gibbs_samples[8],28,"sample8");
+        saveImage(gibbs_samples[9],28,"sample9");
+
+        freeImages(gibbs_samples,n_gibbs_samples,28);
+        freeConvolutionalBayesianNetwork(cbn);
+        freeLayeredImages(layeredImages,TRAINING_SIZE,1,28);
+
+    }
+
+    if (false){
 
         printf("Loading data...");
         bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
@@ -59,8 +174,18 @@ int main(void){
         fitCPTs(cbn->bayesianNetworks[0],1,false,NULL,0);
         fitCPTs(cbn->bayesianNetworks[1],1,false,NULL,0);
 
+        setStateToImage(cbn,layeredImages[0]);
 
-        printNode(cbn->bayesianNetworks[1]->nodes[0][12][12],true);
+        int n_effected_nodes;
+        Node * effected_nodes = effectedNodesOfPixel(cbn,5,5,1,&n_effected_nodes);
+        printf("%d nodes effected\n",n_effected_nodes);
+        free(effected_nodes);
+
+        //bool ** state = getImageFromState(cbn);
+        //printImage(state,28);
+        //freeImage(state,28);
+
+        //printNode(cbn->bayesianNetworks[1]->nodes[0][12][12],true);
 
         //printNode(cbn->bayesianNetworks[1]->nodes[2][3][14],true);
 

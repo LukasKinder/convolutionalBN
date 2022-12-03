@@ -102,15 +102,74 @@ void learnLayer(ConvolutionalBayesianNetwork cbn,int layer, bool **** images, in
 
     fitDataCounts(bn,dataLayer,n_images);
 
-    /*if (layer == 1){
-        printImage(dataLayer[0][0],temp_size);
-        printImage(dataLayer[0][1],temp_size);
-        printImage(dataLayer[0][2],temp_size);
-    }*/
-
     if (layer != 0){
         freeLayeredImages(dataLayer,n_images,temp_d,temp_size); //dont need to remember the training data anymore
     }
+}
+
+bool ** getImageFromState(ConvolutionalBayesianNetwork cbn){
+    int image_size = cbn->bayesianNetworks[0]->size;
+    bool ** image = malloc(sizeof(bool*) * image_size);
+    for (int i = 0; i < image_size; i++){
+        image[i] = malloc(sizeof(bool) * image_size);
+        for (int j = 0; j < image_size; j++){
+            image[i][j] = cbn->bayesianNetworks[0]->nodes[0][i][j]->value;
+        }
+    }
+    return image;
+}
+
+
+void setStateToImage(ConvolutionalBayesianNetwork cbn ,bool *** layeredImage){
+    BayesianNetwork bn;
+    bool *** data = layeredImage;
+    bool *** tmp;
+    int currentSize = 28;
+    Kernel k;
+
+    setStateToData(cbn->bayesianNetworks[0], data);
+    if (cbn->n_layers == 1){
+        return;
+    }
+
+    for (int i = 0; i < cbn->n_layers-1; i++){
+
+        bn = cbn->bayesianNetworks[i+1];
+
+        tmp = data;
+
+        data = malloc(sizeof(bool**) * bn->depth);
+
+        for (int j = 0; j < cbn->n_kernels[i]; j++){
+            k = cbn->transitionalKernels[i][j]; 
+            data[j] = applyConvolution(tmp,currentSize,k);
+        }
+        currentSize = sizeAfterConvolution(currentSize,k); //does not matter which kernel exactly
+
+        if (i != 0){
+            freeImages(tmp, bn->depth,currentSize);
+        }
+        tmp = data;
+        data = applyMaxPooling(tmp,currentSize,cbn->poolingKernels[i]);
+        freeImages(tmp, bn->depth,currentSize);
+        currentSize = bn->size;
+        setStateToData(bn, data);
+    }
+
+    freeImages(data, bn->depth,currentSize);
+}
+
+void setToRandomState(ConvolutionalBayesianNetwork cbn, float fractionBlack){
+    bool *** randomLayeredImage = malloc(sizeof(bool **) *1);
+    randomLayeredImage[0] = malloc(sizeof(bool*) * 28);
+    for (int i = 0; i < 28; i++){
+        randomLayeredImage[0][i] = malloc(sizeof(bool) * 28);
+        for (int j = 0; j < 28; j++){
+            randomLayeredImage[0][i][j] = (float)(rand()) / (float)(RAND_MAX) > fractionBlack;
+        }
+    }
+    setStateToImage(cbn,randomLayeredImage);
+    freeImages(randomLayeredImage,1,28);
 }
 
 
