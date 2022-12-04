@@ -137,3 +137,77 @@ bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iter
     }
     return samples;
 }
+
+//exponentially decreasing temperature, reached 0.005 at max iterations
+float iterationToTemperature(float iteration, float maxIterations){
+    return pow( pow(2.71828, -5.298317 / maxIterations) ,iteration);
+}
+
+bool *** simulatedAnnealing(ConvolutionalBayesianNetwork cbn, int n_samples, int n_iterations){
+
+    bool *** samples = malloc(sizeof(bool**) * n_samples);
+    int image_size = cbn->bayesianNetworks[0]->size;
+    int x,y;
+    Node n;
+    float probTrue, deltaProb, temperature;
+    int iteration = 0;
+
+    samples[0] = getImageFromState(cbn);
+
+    for (int i = 1; i < n_samples; i++){
+        for (int j = 0; j < (int)(n_iterations / n_samples); j++){
+            iteration++;
+
+            x = rand() % image_size;
+            y = rand() % image_size;
+
+            n = cbn->bayesianNetworks[0]->nodes[0][x][y];
+
+            probTrue = probabilityPixelTrue(cbn,n);
+            deltaProb = n->value ? - 2 * (probTrue - 0.5 ) : 2 * (probTrue - 0.5 ) ;
+
+            temperature =  iterationToTemperature(iteration,n_iterations);
+
+            if ( deltaProb > 0 || (float)rand() / (float)RAND_MAX < pow(2.71828, deltaProb / temperature)){
+                n->value = !n->value;
+                propagatePixelChangeUp(cbn,n);
+            }
+        }
+
+        samples[i] = getImageFromState(cbn);
+    }
+    return samples;
+}
+
+bool *** strictClimbing(ConvolutionalBayesianNetwork cbn, int n_samples, int n_iterations){
+
+    bool *** samples = malloc(sizeof(bool**) * n_samples);
+    int image_size = cbn->bayesianNetworks[0]->size;
+    int x,y;
+    Node n;
+    float probTrue, deltaProb;
+
+    samples[0] = getImageFromState(cbn);
+
+    for (int i = 1; i < n_samples; i++){
+        for (int j = 0; j < (int)(n_iterations / n_samples); j++){
+
+            x = rand() % image_size;
+            y = rand() % image_size;
+
+            n = cbn->bayesianNetworks[0]->nodes[0][x][y];
+
+            probTrue = probabilityPixelTrue(cbn,n);
+            deltaProb = n->value ? - 2 * (probTrue - 0.5 ) : 2 * (probTrue - 0.5 ) ;
+
+
+            if ( deltaProb > 0){
+                n->value = !n->value;
+                propagatePixelChangeUp(cbn,n);
+            }
+        }
+
+        samples[i] = getImageFromState(cbn);
+    }
+    return samples;
+}

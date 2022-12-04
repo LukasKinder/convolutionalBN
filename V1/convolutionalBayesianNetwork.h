@@ -57,6 +57,7 @@ void learnLayer(ConvolutionalBayesianNetwork cbn,int layer, bool **** images, in
     }
 
     BayesianNetwork bn = createBayesianNetwork(new_layer_size,depth);
+    bn->distanceRelation = neighbourDistance;
     if (learnStructure){
         printf("Structure learning not implemented!");
         exit(1);
