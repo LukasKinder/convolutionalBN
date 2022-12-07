@@ -1,8 +1,8 @@
 
 
-#define MAX_ITERATIONS_EM 20 //default 20
-#define KERNEL_SEARCH_ITERATION_PER_PARAMETER 10 //default 10
-#define MAX_ITERATIONS_KERNEL_SEARCH 15 //default 15
+#define MAX_ITERATIONS_EM 4 //default 5
+#define KERNEL_SEARCH_ITERATION_PER_PARAMETER 4 //default 10
+#define MAX_ITERATIONS_KERNEL_SEARCH 10 //default 15
 
 
 
@@ -239,15 +239,16 @@ bool optimizeKernels(BayesianNetwork bn, Kernel * kernels, int n_kernels
         new_bic_improvement = bic(bn,newData,n_data,true,false) - bic(bn_no_relations,newData,n_data,true,false);
         
 
-        if (verbose) printf("Iteration %d / %d current  bic: %f, suggested bic: %f",iteration,n_iterations,current_bic_improvement,new_bic_improvement);
+        if (verbose  && iteration% 30 == 0) printf("Iteration %d / %d current  bic: %f, suggested bic: %f",iteration,n_iterations,current_bic_improvement,new_bic_improvement);
 
-        if (new_bic_improvement < current_bic_improvement){
+        if (new_bic_improvement <= current_bic_improvement){
+            current_bic_improvement = new_bic_improvement ;
             //keep change
-            if (verbose) printf("  ===> accepted\n");
+            if (verbose  && iteration% 30 == 0) printf("  ===> accepted\n");
         }else{
             //discard Change
             randomKernel.map[randD][randX][randY] = previous;
-            if (verbose) printf("  ===> rejected\n");
+            if (verbose  && iteration% 30 == 0) printf("  ===> rejected\n");
         }
     }
 
@@ -257,13 +258,16 @@ bool optimizeKernels(BayesianNetwork bn, Kernel * kernels, int n_kernels
     if (verbose) printf("Done\n");
 }
 
+
 void em_algorithm(BayesianNetwork bn, Kernel * kernels, int n_kernels, Kernel poolingKernel, bool **** data, int n_data, int size_data){
     
     bool **** data_next_layer = dataTransition(data,n_data,kernels[0].depth,size_data,kernels,n_kernels,poolingKernel);
     float current_bic = bic(bn,data_next_layer,n_data,true,false);
     float next_bic;
 
-    //ToDO init kernels somehow
+    pretrainKernels(kernels,n_kernels,poolingKernel,data,n_data,size_data,bn->distanceRelation,true);
+
+
     printf("Running EM algorithm\n");
 
     for (int i = 0; i < MAX_ITERATIONS_EM ; i++){

@@ -103,7 +103,7 @@ float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n){
 
 
 
-bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iterationsBetween){
+bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iterations){
 
     bool *** samples = malloc(sizeof(bool**) * n_samples);
     int image_size = cbn->bayesianNetworks[0]->size;
@@ -114,7 +114,7 @@ bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iter
     samples[0] = getImageFromState(cbn);
 
     for (int i = 1; i < n_samples; i++){
-        for (int j = 0; j < iterationsBetween; j++){
+        for (int j = 0; j < iterations / n_samples; j++){
 
             x = rand() % image_size;
             y = rand() % image_size;
@@ -124,10 +124,8 @@ bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iter
             probTrue = probabilityPixelTrue(cbn,n);
 
             if ( (float)rand() / (float)RAND_MAX < probTrue){
-                if (!n->value) printf("cahnge!\n");
                 n->value = true;
             }else{
-                if (n->value) printf("cahnge!\n");
                 n->value = false;
             }
 

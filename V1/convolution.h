@@ -295,10 +295,11 @@ bool **** dataTransition(bool **** dataPrevious, int n_instances, int depth, int
             newData[i][j] = applyConvolution(dataPrevious[i],size,k);
         }
 
-        temp[i] = newData[i];
-        newData[i] = applyMaxPooling(temp[i],sizeAfterNormalConvolution,poolingKernel);
-
-        freeImages(temp[i],n_kernels,sizeAfterNormalConvolution);
+        if (poolingKernel.size != 1){
+            temp[i] = newData[i];
+            newData[i] = applyMaxPooling(temp[i],sizeAfterNormalConvolution,poolingKernel);
+            freeImages(temp[i],n_kernels,sizeAfterNormalConvolution);
+        }
     }
     free(temp);
 

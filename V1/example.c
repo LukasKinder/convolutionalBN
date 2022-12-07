@@ -3,11 +3,14 @@
 
 #include "my_mnist.h"
 #include "convolution.h"
+#include "dataAnalysis.h"
 #include "bayesianNetwork.h"
 #include "convolutionalBayesianNetwork.h"
 #include "inference.h"
+#include "pretrainKernels.h"
 #include "em_algorithm.h"
-#define TRAINING_SIZE 100
+
+#define TRAINING_SIZE 10000
 
 int main(void){
 
@@ -21,27 +24,28 @@ int main(void){
         printf("MAIN: init cbn\n");
         ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork();
 
-        addLayerToCbn(cbn,4,mustTMustFEither,3,2);
-        addLayerToCbn(cbn,4,mustTMustFEither,3,2);
-        addLayerToCbn(cbn,4,mustTMustFEither,3,2);
+        addLayerToCbn(cbn,7,mustTMustFEither,2,2);
+        addLayerToCbn(cbn,4,mustTMustFEither,2,2);
+        addLayerToCbn(cbn,4,mustTMustFEither,2,2);
         addLayerToCbn(cbn,4,mustTMustFEither,2,2);
         addLayerToCbn(cbn,4,mustTMustFEither,2,2);
 
         printf("MAIN: fit cbn\n");
-        fitCBN(cbn,images,TRAINING_SIZE,1,true);
+        fitCBN(cbn,images,TRAINING_SIZE-1,1,true);
         
 
         printf("MAIN: starting sampling\n");
-        setStateToImage(cbn,images[0]);
+        setStateToImage(cbn,images[TRAINING_SIZE -1]);
         //setToRandomState(cbn,0.7);
-        int n_samples = 55;
-        bool *** samples = gibbsSampling(cbn,n_samples,100);
-        //bool *** samples = simulatedAnnealing(cbn,n_samples,5000);
+        int n_samples = 99;
+        bool *** samples = gibbsSampling(cbn,n_samples,10000);
+        //bool *** samples = simulatedAnnealing(cbn,n_samples,10000);
         //bool *** samples = strictClimbing(cbn,n_samples,5000);
 
-        char name[10] = "sampleX";
+        char name[10] = "sampleXX";
         for (int i = 0; i < n_samples; i++){
-            name[6] = i + '0';
+            name[6] = (char)('0' +  i / 10 );
+            name[7] = (char)('0' +  i % 10);
             saveImage(samples[i],28,name);
         }
 

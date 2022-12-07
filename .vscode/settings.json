@@ -1,5 +1,9 @@
 {
     "files.associations": {
-        "convolutionalbayesiannetwork.h": "c"
+        "convolutionalbayesiannetwork.h": "c",
+        "em_algorithm.h": "c",
+        "inference.h": "c",
+        "dataanalysis.h": "c",
+        "stdio.h": "c"
     }
 }

@@ -100,6 +100,8 @@ void fitCBN(ConvolutionalBayesianNetwork cbn, bool *** images, int n_data,float 
         
         data = dataTransition(temp,n_data,cbn->bayesianNetworks[layer-1]->depth,cbn->bayesianNetworks[layer-1]->size
             ,cbn->transitionalKernels[layer-1],cbn->n_kernels[layer-1],cbn->poolingKernels[layer-1]);
+
+        printImageForEachKernel(data[0],layer,cbn->bayesianNetworks[layer]->depth,cbn->bayesianNetworks[layer]->size);
         
 
         if (verbose)printf("FIT_CBN: Learn CPTs\n");
