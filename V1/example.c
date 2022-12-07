@@ -7,75 +7,51 @@
 #include "convolutionalBayesianNetwork.h"
 #include "inference.h"
 #include "em_algorithm.h"
-
-#define TRAINING_SIZE 10
+#define TRAINING_SIZE 100
 
 int main(void){
 
     srand(42);
 
-    if (true){
-        printf("Loading data...");
+    if (true){+
+        printf("Loading data...\n");
         bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
         printf("Done!\n");
-        bool **** layeredImages;
-        layeredImages = malloc(sizeof(bool ***) * TRAINING_SIZE);
-        for (int i =0; i < TRAINING_SIZE; i++){
-            layeredImages[i] = malloc(sizeof(bool**)*1);
-            layeredImages[i][0] = images[i]; 
+
+        printf("MAIN: init cbn\n");
+        ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork();
+
+        addLayerToCbn(cbn,4,mustTMustFEither,3,2);
+        addLayerToCbn(cbn,4,mustTMustFEither,3,2);
+        addLayerToCbn(cbn,4,mustTMustFEither,3,2);
+        addLayerToCbn(cbn,4,mustTMustFEither,2,2);
+        addLayerToCbn(cbn,4,mustTMustFEither,2,2);
+
+        printf("MAIN: fit cbn\n");
+        fitCBN(cbn,images,TRAINING_SIZE,1,true);
+        
+
+        printf("MAIN: starting sampling\n");
+        setStateToImage(cbn,images[0]);
+        //setToRandomState(cbn,0.7);
+        int n_samples = 55;
+        bool *** samples = gibbsSampling(cbn,n_samples,100);
+        //bool *** samples = simulatedAnnealing(cbn,n_samples,5000);
+        //bool *** samples = strictClimbing(cbn,n_samples,5000);
+
+        char name[10] = "sampleX";
+        for (int i = 0; i < n_samples; i++){
+            name[6] = i + '0';
+            saveImage(samples[i],28,name);
         }
-        free(images);
 
-        Kernel k1 = createKernel(2,1,mustTMustFEither,1,false);
-        Kernel k2 = createKernel(2,1,mustTMustFEither,1,false);
-        Kernel k3 = createKernel(2,1,mustTMustFEither,1,false);
-
-        k1.map[0][0][0] = must_true;  k1.map[0][0][1] = either; 
-        k1.map[0][1][0] = must_false; k1.map[0][1][1] = either; 
-
-        k2.map[0][0][0] = must_true;  k2.map[0][0][1] = must_false; 
-        k2.map[0][1][0] = either; k2.map[0][1][1] = either; 
-
-        k3.map[0][0][0] = must_false;  k3.map[0][0][1] = must_false; 
-        k3.map[0][1][0] = must_false; k3.map[0][1][1] = must_false; 
-
-        Kernel *kernel_array = malloc(sizeof(Kernel) * 3);
-        kernel_array[0] = k1; kernel_array[1] = k2;  kernel_array[2] = k3; 
-
-        Kernel ** kernel_arrays = malloc(sizeof(Kernel * ) * 1);
-        kernel_arrays[0] = kernel_array;
-
-        int *n_kernels = malloc(sizeof(int) * 1);
-        n_kernels[0] = 3;
-
-        Kernel poolingKernel = createKernel(2,3,pooling,1,false);
-        Kernel * pooling_kernels = malloc(sizeof(Kernel) * 1);
-        pooling_kernels[0] = poolingKernel;
-
-        printf("learning cbn\n");
-        ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(2,n_kernels,kernel_arrays,pooling_kernels);
-        printf("Leanr layer0;\n");
-        learnLayer(cbn,0,layeredImages,TRAINING_SIZE,28,1,false,false,true);
-        printf("leanr layer 1:\n");
-        learnLayer(cbn,1,layeredImages,TRAINING_SIZE,28,3,false,false,false); //neighbour distance to avoide overlapping responsive filters
-
-        fitCPTs(cbn->bayesianNetworks[0],1,false,NULL,0);
-        fitCPTs(cbn->bayesianNetworks[1],1,false,NULL,0);
-        printf("finished learning cbn\n");
-
-
-        bool **** dataLayer1;
-        dataLayer1 = dataTransition(layeredImages,TRAINING_SIZE,1,28,cbn->transitionalKernels[0],cbn->n_kernels[0],cbn->poolingKernels[0]);
-
-        optimizeStructure(cbn->bayesianNetworks[1],dataLayer1,TRAINING_SIZE,false);
-
-        freeLayeredImages(dataLayer1,TRAINING_SIZE,3,26);
+        freeImages(samples,n_samples,28);
+        freeImages(images,TRAINING_SIZE,28);
         freeConvolutionalBayesianNetwork(cbn);
-        freeLayeredImages(layeredImages,TRAINING_SIZE,1,28);
     }
 
     //calculate bic
-    if (false){
+    /*if (false){
         printf("Loading data...");
         bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
         printf("Done!\n");
@@ -133,9 +109,9 @@ int main(void){
         printf("BIC layer1:  %f, BIC layer2 = %f\n",bic1,bic2);
 
         float bic2A,bic2B,bic2C;
-        bic2A = bicOneLevel(cbn->bayesianNetworks[1],dataLayer1,TRAINING_SIZE,0 );
-        bic2B = bicOneLevel(cbn->bayesianNetworks[1],dataLayer1,TRAINING_SIZE,1 );
-        bic2C = bicOneLevel(cbn->bayesianNetworks[1],dataLayer1,TRAINING_SIZE,2 );
+        bic2A = bicOneLevel(cbn->bayesianNetworks[1],dataLayer1,TRAINING_SIZE,0,true );
+        bic2B = bicOneLevel(cbn->bayesianNetworks[1],dataLayer1,TRAINING_SIZE,1,true );
+        bic2C = bicOneLevel(cbn->bayesianNetworks[1],dataLayer1,TRAINING_SIZE,2,true );
         printf("%f + %f + %f = %f\n",bic2A,bic2B,bic2C, bic2A+bic2B+bic2C);
 
 
@@ -508,6 +484,6 @@ int main(void){
                 }
             }
         } 
-    }
+    }*/
     return 0;
 }  

@@ -1,5 +1,8 @@
 
 
+//predefine function
+void em_algorithm(BayesianNetwork bn, Kernel * kernels, int n_kernels, Kernel poolingKernel, bool **** data, int n_data, int size_data);
+
 typedef struct RawConvolutionalBayesianNetwork *ConvolutionalBayesianNetwork;
 
 typedef struct RawConvolutionalBayesianNetwork {
@@ -10,103 +13,117 @@ typedef struct RawConvolutionalBayesianNetwork {
     int * n_kernels; //n_kernels for each transitions
 }RawConvolutionalBayesianNetwork;
 
-ConvolutionalBayesianNetwork createConvolutionalBayesianNetwork(int n_layers, int* n_kernels, Kernel ** kernels, Kernel * poolingKernels){
+ConvolutionalBayesianNetwork createConvolutionalBayesianNetwork(){
     ConvolutionalBayesianNetwork cbn = malloc(sizeof(RawConvolutionalBayesianNetwork));
-    cbn->n_layers = n_layers;
-    cbn->bayesianNetworks = malloc(sizeof(BayesianNetwork) * n_layers);
-    for (int i = 0; i < n_layers; i++){
-        cbn->bayesianNetworks[i] = NULL;
-    }
-    cbn->n_kernels = n_kernels;
-    cbn->transitionalKernels = kernels;
-    cbn->poolingKernels = poolingKernels;
+    cbn->n_layers = 1;
+    cbn->bayesianNetworks = malloc(sizeof(BayesianNetwork) * 1);
+    cbn->bayesianNetworks[0] = createBayesianNetwork(28,1,1);
+    addAllDependencies(cbn->bayesianNetworks[0],1,true); //hardcoded relations in first layer
+    cbn->n_kernels = NULL;
+    cbn->transitionalKernels = NULL;
+    cbn->poolingKernels = NULL;
 }
 
-bool **** dataTransition(bool **** dataPrevious, int n_instances, int depth, int size, Kernel *kernels, int n_kernels, Kernel poolingKernel){
-    bool **** newData = malloc(sizeof(bool***) * n_instances);
-    bool **** temp = malloc(sizeof(bool***) * n_instances);;
-    int sizeAfterNormalConvolution = sizeAfterConvolution(size, kernels[0]); //assume that all kernels lead to same size
-    Kernel k;
-
-    for (int  i = 0; i < n_instances; i++){
-        newData[i] = malloc(sizeof(bool **) * n_kernels);
+//Todo enable stride and padding
+void addLayerToCbn(ConvolutionalBayesianNetwork cbn, int n_kernels, KernelType kernel_type, int kernel_size, int pooling_size){
+    int current_n_layers = cbn->n_layers;
+    Kernel * kernels = malloc(sizeof(Kernel) * n_kernels);
+    int previous_data_depth = cbn->bayesianNetworks[current_n_layers-1]->depth;
+    for (int i = 0; i < n_kernels; i++){
+        kernels[i] = createKernel(kernel_size,previous_data_depth, kernel_type,1,false);
     }
 
-    #pragma omp parallel for
-    for (int  i = 0; i < n_instances; i++){
-        for (int j = 0; j < n_kernels;j++){
-            k = kernels[j]; 
-            newData[i][j] = applyConvolution(dataPrevious[i],size,k);
-        }
-        temp[i] = newData[i];
-        newData[i] = applyMaxPooling(temp[i],sizeAfterNormalConvolution,poolingKernel);
-        freeImages(temp[i],n_kernels,sizeAfterNormalConvolution);
-    }
-    free(temp);
-    return newData;
+    cbn->transitionalKernels = realloc(cbn->transitionalKernels,sizeof(Kernel *) * current_n_layers);
+    cbn->transitionalKernels[current_n_layers-1] = kernels;
+
+    cbn->n_kernels = realloc(cbn->n_kernels, sizeof(int) * (current_n_layers));
+    cbn->n_kernels[current_n_layers-1] = n_kernels;
+
+    cbn->poolingKernels = realloc(cbn->poolingKernels,sizeof(Kernel) * (current_n_layers));
+    cbn->poolingKernels[current_n_layers-1] = createKernel(pooling_size,n_kernels,pooling,1,false);
+
+
+    int data_size = cbn->bayesianNetworks[current_n_layers-1]->size;
+    data_size = sizeAfterConvolution(data_size,kernels[0]);
+    data_size = sizeAfterConvolution(data_size,cbn->poolingKernels[current_n_layers-1]);
+
+    cbn->bayesianNetworks = realloc(cbn->bayesianNetworks,sizeof(BayesianNetwork) * (current_n_layers +1));
+    int new_distance_relation = cbn->bayesianNetworks[current_n_layers-1]->distanceRelation + kernel_size + pooling_size -2;
+    cbn->bayesianNetworks[current_n_layers] = createBayesianNetwork(data_size, n_kernels,new_distance_relation);
+
+    (cbn->n_layers)++;
 }
 
-//learns the kernels and writes down counts for next layer
-//if learn stucture is off, bayesian network in next layer will be fully connected
-void learnLayer(ConvolutionalBayesianNetwork cbn,int layer, bool **** images, int n_images, int image_size,int neighbourDistance, bool learnStructure, bool learnKernels, bool diagonalRelations){
-    int new_layer_size = image_size;
-    int depth = (layer == 0 ? 1 : cbn->n_kernels[layer-1]);
-    for (int i = 0; i < layer; i++){
-        new_layer_size = sizeAfterConvolution(new_layer_size, cbn->transitionalKernels[i][0]);
-        new_layer_size = sizeAfterConvolution(new_layer_size, cbn->poolingKernels[i]);
+void fitCBN(ConvolutionalBayesianNetwork cbn, bool *** images, int n_data,float pseudo_Counts, bool verbose){
+
+    if (verbose){
+        printf("FIT_CBN: init layered image representation\n");
     }
 
-    BayesianNetwork bn = createBayesianNetwork(new_layer_size,depth);
-    bn->distanceRelation = neighbourDistance;
-    if (learnStructure){
-        printf("Structure learning not implemented!");
-        exit(1);
-        //init kernels & dependencies
+    bool **** layeredImages;
+    layeredImages = malloc(sizeof(bool ***) * n_data);
+    for (int i =0; i < n_data; i++){
+        layeredImages[i] = malloc(sizeof(bool**)*1);
+        layeredImages[i][0] = images[i]; 
+    }
 
-        if (learnKernels){
-            // Repeat;
-            // optimize kernels given dependencies
-            // optimize dependencies, given kernel
-        }else{
-            // optimize dependencies, given kernel
+    if (verbose) printf("FIT_CBN: fit layer 0\n");
+    
+
+    fitDataCounts(cbn->bayesianNetworks[0],layeredImages,n_data);
+    fitCPTs(cbn->bayesianNetworks[0],pseudo_Counts,false,NULL,-1);
+
+    if (verbose) printf("FIT_CBN: Done\n");
+    
+
+    if (cbn->n_layers == 1){
+        for (int i =0; i < n_data; i++){
+            free(layeredImages[i]);
         }
-    }else{
+        free(layeredImages);
+        return;
+    }
 
 
-        addAllDependencies(bn,neighbourDistance,diagonalRelations);
-        if (learnKernels){
-            //optimize kernels given dependencies
+    bool ****data = layeredImages;
+    bool ****temp;
+    for (int layer = 1; layer < cbn->n_layers; layer++){
+
+        if (verbose) printf("FIT_CBN: fit layer %d using em-algorithm\n",layer);
+        
+
+        em_algorithm(cbn->bayesianNetworks[layer],cbn->transitionalKernels[layer-1],cbn->n_kernels[layer-1]
+                ,cbn->poolingKernels[layer-1],data,n_data,cbn->bayesianNetworks[layer-1]->size);
+
+
+        temp = data;
+        
+        data = dataTransition(temp,n_data,cbn->bayesianNetworks[layer-1]->depth,cbn->bayesianNetworks[layer-1]->size
+            ,cbn->transitionalKernels[layer-1],cbn->n_kernels[layer-1],cbn->poolingKernels[layer-1]);
+        
+
+        if (verbose)printf("FIT_CBN: Learn CPTs\n");
+
+        fitDataCounts(cbn->bayesianNetworks[layer],data,n_data);
+        fitCPTs(cbn->bayesianNetworks[layer],pseudo_Counts,false,NULL,-1);
+
+        if (verbose) printf("FIT_CBN: Done\n");
+        
+        
+        if (layer == 1){
+            for (int i =0; i < n_data; i++){
+                free(layeredImages[i]);
+            }
+            free(layeredImages);
+        } else {
+            //printf("free previous %d %d %d \n",n_data,cbn->bayesianNetworks[layer-1]->depth,cbn->bayesianNetworks[layer-1]->size);
+            freeLayeredImages(temp,n_data,cbn->bayesianNetworks[layer-1]->depth,cbn->bayesianNetworks[layer-1]->size);
         }
     }
-
-    cbn->bayesianNetworks[layer] = bn;
-
-    bool **** dataLayer = images;
-    bool **** tmp;
-    int temp_d = 1;
-    int temp_size = image_size;
-    for (int i = 0; i < layer; i++){
-        tmp = dataLayer;
-        dataLayer = dataTransition(tmp,n_images,temp_d,image_size,cbn->transitionalKernels[i],cbn->n_kernels[i],cbn->poolingKernels[i]);
-
-        if (i != 0){
-            //do not free images
-            freeLayeredImages(tmp, n_images,temp_d,temp_size);
-        }
-
-        temp_d = cbn->n_kernels[i];
-        temp_size = sizeAfterConvolution(temp_size,cbn->transitionalKernels[i][0]);
-        temp_size = sizeAfterConvolution(temp_size,cbn->poolingKernels[i]);
-
-    }
-
-
-    fitDataCounts(bn,dataLayer,n_images);
-
-    if (layer != 0){
-        freeLayeredImages(dataLayer,n_images,temp_d,temp_size); //dont need to remember the training data anymore
-    }
+    //printf("free last %d %d %d\n", n_data, cbn->bayesianNetworks[cbn->n_layers-1]->depth,cbn->bayesianNetworks[cbn->n_layers-1]->size);
+    freeLayeredImages(data,n_data, cbn->bayesianNetworks[cbn->n_layers-1]->depth,cbn->bayesianNetworks[cbn->n_layers-1]->size);
 }
+
 
 bool ** getImageFromState(ConvolutionalBayesianNetwork cbn){
     int image_size = cbn->bayesianNetworks[0]->size;
@@ -121,35 +138,39 @@ bool ** getImageFromState(ConvolutionalBayesianNetwork cbn){
 }
 
 
-void setStateToImage(ConvolutionalBayesianNetwork cbn ,bool *** layeredImage){
+void setStateToImage(ConvolutionalBayesianNetwork cbn ,bool ** image){
     BayesianNetwork bn;
-    bool *** data = layeredImage;
+    bool *** data = malloc(sizeof(bool **) *1);
+    data[0] = image;
     bool *** tmp;
     int currentSize = 28;
     Kernel k;
 
     setStateToData(cbn->bayesianNetworks[0], data);
     if (cbn->n_layers == 1){
+        free(data);
         return;
     }
 
     for (int i = 0; i < cbn->n_layers-1; i++){
 
         bn = cbn->bayesianNetworks[i+1];
-
         tmp = data;
-
         data = malloc(sizeof(bool**) * bn->depth);
 
-        for (int j = 0; j < cbn->n_kernels[i]; j++){
+        for (int j = 0; j < bn->depth; j++){
             k = cbn->transitionalKernels[i][j]; 
             data[j] = applyConvolution(tmp,currentSize,k);
         }
-        currentSize = sizeAfterConvolution(currentSize,k); //does not matter which kernel exactly
 
         if (i != 0){
-            freeImages(tmp, bn->depth,currentSize);
+            freeImages(tmp, cbn->bayesianNetworks[i]->depth,cbn->bayesianNetworks[i]->size);
+        }else{
+            free(tmp);
         }
+        
+        currentSize = sizeAfterConvolution(currentSize,k); //does not matter which kernel exactly
+
         tmp = data;
         data = applyMaxPooling(tmp,currentSize,cbn->poolingKernels[i]);
         freeImages(tmp, bn->depth,currentSize);
@@ -161,16 +182,17 @@ void setStateToImage(ConvolutionalBayesianNetwork cbn ,bool *** layeredImage){
 }
 
 void setToRandomState(ConvolutionalBayesianNetwork cbn, float fractionBlack){
-    bool *** randomLayeredImage = malloc(sizeof(bool **) *1);
-    randomLayeredImage[0] = malloc(sizeof(bool*) * 28);
-    for (int i = 0; i < 28; i++){
-        randomLayeredImage[0][i] = malloc(sizeof(bool) * 28);
+    bool ** randomImage = malloc(sizeof(bool*) * 28);
+
+    for(int i = 0; i < 28; i++){
+        randomImage[i] = malloc(sizeof(int) * 28);
         for (int j = 0; j < 28; j++){
-            randomLayeredImage[0][i][j] = (float)(rand()) / (float)(RAND_MAX) > fractionBlack;
+            randomImage[i][j] = (float)(rand()) / (float)(RAND_MAX) > fractionBlack;
         }
     }
-    setStateToImage(cbn,randomLayeredImage);
-    freeImages(randomLayeredImage,1,28);
+    
+    setStateToImage(cbn,randomImage);
+    freeImage(randomImage,28);
 }
 
 

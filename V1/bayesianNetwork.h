@@ -50,6 +50,10 @@ void freeNode(Node n){
     free(n);
 }
 
+void printBayesianNetwork(BayesianNetwork bn){
+    printf("Bayesian network with depth: %d; size = %d; distanceRelations: %d\n",bn->depth,bn->size,bn->distanceRelation);
+}
+
 void printNode(Node n, bool printTables){
     printf("Node at position (d/x/y): %d %d %d\n",n->depth,n->x,n->y);
     Node n2;
@@ -97,9 +101,10 @@ void setStateToData(BayesianNetwork bn, bool *** data){
     }
 }
 
-BayesianNetwork createBayesianNetwork(int size, int depth){
+BayesianNetwork createBayesianNetwork(int size, int depth, int distance_relation){
     BayesianNetwork bn = malloc(sizeof(RawBayesianNetwork));
     bn->size = size;
+    bn->distanceRelation = distance_relation;
     int i,j,k;
     bn->depth = depth;
     bn->nodes = malloc(sizeof(Node**) * depth);
@@ -290,9 +295,6 @@ void fitDataCounts(BayesianNetwork bn, bool **** data, int data_instances){
                         parentNode = n->parents[j];
                         parentCombination[j] = data[i][parentNode->depth][parentNode->x][parentNode->y];
                     }
-
-
-
                     if (data[i][d][x][y]){
                         n->stateCountsTrue[ binaryToInt(parentCombination,n->n_parents)]++;
                     }else{
@@ -303,7 +305,6 @@ void fitDataCounts(BayesianNetwork bn, bool **** data, int data_instances){
             }
         }
     }
-
 }
 
 // determining the CPTs by using the counts and laplaceCorrelation / smooting
@@ -446,11 +447,25 @@ int numberParameters(BayesianNetwork bn){
 
 
 /*Todo approximate bic with fraction of parameters\n*/
-float bic(BayesianNetwork bn, bool **** data, int n_data,  bool updateCounts){
+float bic(BayesianNetwork bn, bool **** data, int n_data,  bool updateCounts, bool verbose){
+
+    if (verbose){
+        printf("n_parameters = %d, n_data = %d; log(n_data=  %f, logLikelihood =%f === %f\n"
+            ,numberParameters(bn), n_data, log(n_data),logMaxLikelihoodDataGivenModel(bn,data,n_data, updateCounts)
+            ,numberParameters(bn) * log(n_data) - 2 * logMaxLikelihoodDataGivenModel(bn,data,n_data, updateCounts));
+    }
+
     return numberParameters(bn) * log(n_data) - 2 * logMaxLikelihoodDataGivenModel(bn,data,n_data, updateCounts);
 }
 
-float bicOneLevel(BayesianNetwork bn, bool **** data, int n_data, int level){
+float bicOneLevel(BayesianNetwork bn, bool **** data, int n_data, int level, bool verbose){
+
+    if (verbose){
+        printf("n_parameters = %d, n_data = %d; log(n_data) = %f; log_liklyhoodData = %f. ===> BIC %f\n",
+        numberParametersOneLevel(bn,level) ,n_data, log(n_data), logMaxLikelihoodDataGivenModelOneLevel(bn,data,n_data, level),
+         numberParametersOneLevel(bn,level) * log(n_data) - 2 * logMaxLikelihoodDataGivenModelOneLevel(bn,data,n_data, level));
+
+    }
 
     return numberParametersOneLevel(bn,level) * log(n_data) - 2 
             * logMaxLikelihoodDataGivenModelOneLevel(bn,data,n_data, level);

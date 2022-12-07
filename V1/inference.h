@@ -1,12 +1,11 @@
 
 //assumes not stride or padding for now
 //Very inefficient for now!
+//TODO: make efficient
 void propagatePixelChangeUp(ConvolutionalBayesianNetwork cbn, Node n){
     bool ** image = getImageFromState(cbn);
-    bool *** layeredImage = malloc(sizeof(bool**) * 1);
-    layeredImage[0] = image;
-    setStateToImage(cbn,layeredImage);
-    freeImages(layeredImage,1,28);
+    setStateToImage(cbn,image);
+    freeImage(image,28);
 }
 
 double probabilityGivenParents(Node n){
@@ -125,8 +124,10 @@ bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iter
             probTrue = probabilityPixelTrue(cbn,n);
 
             if ( (float)rand() / (float)RAND_MAX < probTrue){
+                if (!n->value) printf("cahnge!\n");
                 n->value = true;
             }else{
+                if (n->value) printf("cahnge!\n");
                 n->value = false;
             }
 

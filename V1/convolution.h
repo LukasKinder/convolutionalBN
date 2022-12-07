@@ -42,10 +42,10 @@ Kernel createKernel(int size,int depth, KernelType type, int stride, bool paddin
                 for (int j = 0; j < size; j ++){
                     kernel.map[i][j] = malloc(sizeof(MT_MF_E_Value) * size);
                     for (int k = 0; k < size; k ++){
-                        int randomNumber = rand() % 3;
-                        if (randomNumber == 0){
+                        int randomNumber = rand() % (size * size * depth) ;
+                        if (randomNumber <2){
                             kernel.map[i][j][k] = must_true;
-                        } else if (randomNumber == 1){
+                        } else if (randomNumber <4){
                             kernel.map[i][j][k] = must_false;
                         } else {
                             kernel.map[i][j][k] = either;
@@ -147,50 +147,63 @@ int sizeAfterConvolution(int originalSize, Kernel kernel){
     return convolutions;
 }
 
+//depth of kernel may not by 1
+bool ** applyMaxPoolingOneLayer(bool ** data, int data_size, Kernel kernel){
+    if (kernel.type != pooling){
+        printf("wrong type of kernel for pooling");
+    }
+
+    int newSize = sizeAfterConvolution(data_size,kernel);
+    int x,y,i,j,responseX,responseY;
+    bool isFalse;
+
+    bool ** newData = malloc(sizeof(bool *) * newSize);
+    for (i = 0; i < newSize; i++){
+        newData[i] = malloc(sizeof(bool) * newSize);
+    }
+
+    #pragma omp parallel for collapse(2)
+    for (int x = 0; x < newSize; x++){
+        for (int y = 0; y < newSize; y++){
+            int responseX = x * kernel.stride - (kernel.padding ? kernel.size -1: 0);
+            int responseY = y * kernel.stride - (kernel.padding ? kernel.size -1: 0);
+            bool isFalse = false;
+            for (i = responseX; i < responseX +  kernel.size; i++){
+                for (j = responseY; j < responseY + kernel.size; j++){
+
+                    if (i < 0 || j < 0 || i>=data_size || j >= data_size){
+                        continue;; //out of bound because of padding
+                    } else {
+                        isFalse = isFalse || data[i][j];
+                    }
+                }
+            }
+            newData[x][y] = isFalse;
+        }
+    }
+    
+    return newData;
+
+}
+
 
 bool *** applyMaxPooling(bool ***data, int data_size, Kernel kernel){
     if (kernel.type != pooling){
         printf("wrong type of kernel for pooling");
     }
 
-    int newSize = sizeAfterConvolution(data_size,kernel);
-    int d,x,y,i,j,responseX,responseY;
-    bool isFalse;
-
     bool *** newData = malloc(sizeof(bool **) * kernel.depth);
-    for (i = 0; i < kernel.depth; i++){
-        newData[i] = malloc(sizeof(bool*) * newSize);
-        for (j = 0; j < newSize; j++){
-            newData[i][j] = malloc(sizeof(bool) * newSize);
-        }
+
+    #pragma omp parallel for
+    for (int d = 0; d < kernel.depth; d++){
+        newData[d] = applyMaxPoolingOneLayer(data[d],data_size,kernel);
     }
 
-    for (d = 0; d < kernel.depth; d++){
-        for (x = 0; x < newSize; x++){
-            for (y = 0; y < newSize; y++){
-
-                responseX = x * kernel.stride - (kernel.padding ? kernel.size -1: 0);
-                responseY = y * kernel.stride - (kernel.padding ? kernel.size -1: 0);
-
-                bool isFalse = false;
-                for (i = responseX; i < responseX +  kernel.size; i++){
-                    for (j = responseY; j < responseY + kernel.size; j++){
-
-                        if (i < 0 || j < 0 || i>=data_size || j >= data_size){
-                            continue;; //out of bound because of padding
-                        } else {
-                            isFalse = isFalse || data[d][i][j];
-                        }
-                    }
-                }
-                newData[d][x][y] = isFalse;
-            }
-        }
-    }
     return newData;
 }
 
 
+//Todo: rewrite with openmp
 //applies convolution with weighted or mustTmustFE kernel
 bool ** applyConvolution(bool*** data, int data_size, Kernel kernel){
 
@@ -262,4 +275,32 @@ bool ** applyConvolution(bool*** data, int data_size, Kernel kernel){
         }
     }
     return new_data;
+}
+
+
+bool **** dataTransition(bool **** dataPrevious, int n_instances, int depth, int size, Kernel *kernels, int n_kernels, Kernel poolingKernel){
+    bool **** newData = malloc(sizeof(bool***) * n_instances);
+    bool **** temp = malloc(sizeof(bool***) * n_instances);;
+    int sizeAfterNormalConvolution = sizeAfterConvolution(size, kernels[0]); //assume that all kernels lead to same size
+    Kernel k;
+
+    for (int  i = 0; i < n_instances; i++){
+        newData[i] = malloc(sizeof(bool **) * n_kernels);
+    }
+
+    #pragma omp parallel for
+    for (int  i = 0; i < n_instances; i++){
+        for (int j = 0; j < n_kernels;j++){
+            k = kernels[j]; 
+            newData[i][j] = applyConvolution(dataPrevious[i],size,k);
+        }
+
+        temp[i] = newData[i];
+        newData[i] = applyMaxPooling(temp[i],sizeAfterNormalConvolution,poolingKernel);
+
+        freeImages(temp[i],n_kernels,sizeAfterNormalConvolution);
+    }
+    free(temp);
+
+    return newData;
 }
