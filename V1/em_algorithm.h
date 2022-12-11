@@ -1,8 +1,9 @@
 
 
-#define MAX_ITERATIONS_EM 4 //default 5
-#define KERNEL_SEARCH_ITERATION_PER_PARAMETER 4 //default 10
-#define MAX_ITERATIONS_KERNEL_SEARCH 10 //default 15
+#define MAX_ITERATIONS_EM 500 //default 5
+#define KERNEL_SEARCH_ITERATION_PER_PARAMETER 2 //default 10
+#define MAX_ITERATIONS_STRUCTURE_SEARCH 10 //default 15
+#define KERNEL_OPTIMIZATION_LOCAL_SEARCH false
 
 
 
@@ -71,6 +72,7 @@ void updateParentsLevel(BayesianNetwork bn,int level, bool * upRelations, bool *
 
 //optimizes the structure of the BN given the data of the BN
 //TODO use different search methods, maybe SA
+//TODO optimize by using relusts of previous iteration!!!
 bool optimizeStructure(BayesianNetwork bn,  bool **** data, int n_data, bool diagonal, bool verbose){
 
     if (verbose) printf("Optimizing structure \n");
@@ -108,7 +110,7 @@ bool optimizeStructure(BayesianNetwork bn,  bool **** data, int n_data, bool dia
         current_heuristic = bicOneLevel(bn,data,n_data,i,false);
 
         // add relations one by one
-        for (int iteration = 0 ; iteration < MAX_ITERATIONS_KERNEL_SEARCH ; iteration++){
+        for (int iteration = 0 ; iteration < MAX_ITERATIONS_STRUCTURE_SEARCH ; iteration++){
 
             if (verbose) printf("Iteration %d: ",iteration);
 
@@ -171,6 +173,141 @@ bool optimizeStructure(BayesianNetwork bn,  bool **** data, int n_data, bool dia
 
 }
 
+//ToDo: can be made more efficiant by not creating a copy of the bn
+//Important that bn has updated counts!
+float kernelHeuristic(bool **** data, int n_data, BayesianNetwork bn, int depth_kernel){
+    BayesianNetwork bn_no_outgoing = createBayesianNetwork(bn->size,bn->depth,bn->distanceRelation);
+    int d,x,y, n_child;
+    Node original_node, original_child,new_node,new_child;
+
+    //same relations as bn but nodes at depth_kernel do not have outgoing relations
+    for (d = 0; d < bn->depth; d++){
+        if (d == depth_kernel) continue; //do not add outgoing relations for nodes in this layer
+        for (x = 0; x < bn->size; x++){
+            for (int y = 0; y < bn->size; y ++){
+                original_node = bn->nodes[d][x][y];
+                new_node = bn_no_outgoing->nodes[original_node ->depth][original_node ->x][original_node ->y];
+                new_node->children = malloc(sizeof(Node) * original_node->n_children);
+
+                for (n_child = 0; n_child < original_node->n_children; n_child++){
+                    original_child = original_node->children[n_child];
+                    new_child = bn_no_outgoing->nodes[original_child->depth][original_child->x][original_child->y];
+                    if (new_child->parents == NULL){
+                        //might be smaller than this, but better than re-allocating
+                        new_child->parents = malloc(sizeof(Node) * original_child->n_parents);
+                    }
+                    //add relations
+                    new_child->parents[new_child->n_parents] = new_node;
+                    new_child->n_parents++;
+                    new_node->children[new_node->n_children] = new_child;
+                    new_node->n_children;
+                }
+            }
+        }
+    }
+    //the actual heuristic, removing outgoin relations should reduce the bic. Effect (probably) bigger if kernel is more important
+    float bic_improvement = bic(bn_no_outgoing,data,n_data,true,false) - bic(bn,data,n_data,false,false);
+
+    freeBayesianNetwork(bn_no_outgoing);
+    return bic_improvement;
+
+}
+
+//TODO: maybe replace multiple kernels at once
+//is changing data_after!
+void optimizeKernelsTryOut(BayesianNetwork bn, Kernel * kernels, int n_kernels, Kernel poolingKernel
+        ,bool **** data_before, int size_before ,bool **** data_after, int n_data, bool verbose){
+
+    //ToDo: maybe tune
+    int max_iterations = 1000;
+    int n_used = (n_data < 20 ? n_data: 20);
+
+    fitDataCounts(bn,data_after,n_data);
+    int i,j,k;
+    int worstKernel = -1;
+    float current_heuristic, worst_heuristic = 999999999;
+    if (verbose) printf("Optimizing kernels by replacing the worst\n");
+
+    for (int i  =0; i < n_kernels; i++){
+        current_heuristic = kernelHeuristic(data_after,n_data,bn,i);
+
+        if (verbose) printf("Kernel %d has a heuristic of %f\n",i,current_heuristic);
+
+        if (current_heuristic < worst_heuristic){
+            worstKernel = i;
+            worst_heuristic = current_heuristic;
+        }
+    }
+    if (verbose) printf("Worst kernel is number %d with a heuristic of %f\n",worstKernel,worst_heuristic);
+    int kernel_size = kernels[worstKernel].size;
+    int kernel_depth = kernels[worstKernel].depth;
+    int kernel_stride = kernels[worstKernel].stride;
+    bool kernel_padding = kernels[worstKernel].padding;
+    KernelType kernel_type =  kernels[worstKernel].type;
+
+    bool **tmp;
+    int tmp_size = sizeAfterConvolution(size_before,kernels[worstKernel]);
+    freeKernel(kernels[worstKernel]);
+
+    if (verbose) printf("Searching for new promising kernel\n");
+
+    float *means = malloc(sizeof(float) * n_kernels);
+    for (int  i = 0; i < n_kernels; i++){
+        if (i == worstKernel) continue;
+        means[i]  =meanKernelValues(data_after,n_used,i,bn->size);
+    }
+
+
+    Kernel new_kernel;
+    float mean,  corr;
+    poolingKernel.depth = 1;
+    for (i = 0; i < max_iterations; i++){
+
+        if (verbose)  printf("Iteration %d / %d: ",i,max_iterations);
+
+        new_kernel = createKernel(kernel_size, kernel_depth ,kernel_type, kernel_stride,kernel_padding);
+
+        //free the data of the old kernel
+        for (j = 0; j < n_used; j++){
+            freeImage(data_after[j][worstKernel],bn->size);
+            tmp = applyConvolution(data_before[j],size_before,new_kernel);
+
+            data_after[j][worstKernel] = applyMaxPoolingOneLayer(tmp,tmp_size,poolingKernel);
+            freeImage(tmp,tmp_size);
+        }
+        mean = meanKernelValues(data_after,n_used,worstKernel,bn->size);
+        if (mean < 0.01 || mean > 0.99){
+            //kernel is not interesting enough
+            //ToDo overwrite instead of free/create maybe
+            freeKernel(new_kernel);
+            if (verbose)  printf("Kernel is not interesting enough (mean = %f)\n",mean);
+            continue;
+        }
+
+        for (int j = 0; j < n_kernels; j++){
+            if (j == worstKernel) continue;
+            corr = fabs( correlation(data_after,n_used,worstKernel,j,bn->size,mean,means[j]));
+            if (0.3 < corr ){
+                //kernel is too similar to an existing kernel
+                if (verbose)  printf("Kernel is too similar to an existing one (%d ==> %f\n",j,corr);
+                freeKernel(new_kernel);
+                break;
+            }
+        }
+        if ( 0.3 < corr) continue;
+
+        if (verbose)  printf("Found a useful kernel! (mean = %f, corr = %f)\n", mean,corr);
+
+        //kernel is meaningful and not too similar to an existing one
+        kernels[worstKernel] = new_kernel;
+        break;
+    }
+    poolingKernel.depth = n_kernels;
+
+    free(means);
+
+}
+
 //optimizes the kernels given the data in the previous layer and a bayesian network with structure
 //TODO different search methods, for now strict climbing
 //TODO for all types of kernels, for now only mustInMustOutEither
@@ -204,7 +341,6 @@ bool optimizeKernels(BayesianNetwork bn, Kernel * kernels, int n_kernels
     current_bic_improvement =  bic(bn,newData,n_data,true,false) - bic(bn_no_relations,newData,n_data,true,false);
 
     if (verbose) printf("initialization done\n");
-    printf("depth previous %d; size kernels = %d\n",depth_previous,size_kernels);
 
     for (int iteration = 0; iteration < n_iterations; iteration++){
         index_rand_kernel = rand() % n_kernels;
@@ -260,30 +396,34 @@ bool optimizeKernels(BayesianNetwork bn, Kernel * kernels, int n_kernels
 
 
 void em_algorithm(BayesianNetwork bn, Kernel * kernels, int n_kernels, Kernel poolingKernel, bool **** data, int n_data, int size_data){
-    
-    bool **** data_next_layer = dataTransition(data,n_data,kernels[0].depth,size_data,kernels,n_kernels,poolingKernel);
-    float current_bic = bic(bn,data_next_layer,n_data,true,false);
-    float next_bic;
 
     pretrainKernels(kernels,n_kernels,poolingKernel,data,n_data,size_data,bn->distanceRelation,true);
+    bool **** data_next_layer = dataTransition(data,n_data,kernels[0].depth,size_data,kernels,n_kernels,poolingKernel);
 
+    float current_bic = bic(bn,data_next_layer,n_data,true,false);
+    float next_bic;
 
     printf("Running EM algorithm\n");
 
     for (int i = 0; i < MAX_ITERATIONS_EM ; i++){
+        
+        printf("Optimizing Structure\n");
+        optimizeStructure(bn,data_next_layer,n_data,false,false);
 
-        optimizeStructure(bn,data_next_layer,n_data,false,true);
+        if (KERNEL_OPTIMIZATION_LOCAL_SEARCH){
+            optimizeKernels(bn,kernels,n_kernels,poolingKernel,data,n_data,size_data,false);
+        }else{
+            printf("Adapting Kernels\n");
+            optimizeKernelsTryOut(bn,kernels,n_kernels, poolingKernel ,data,size_data,data_next_layer,n_data,true);
+        }
         freeLayeredImages(data_next_layer,n_data,bn->depth,bn->size);
-
-        optimizeKernels(bn,kernels,n_kernels,poolingKernel,data,n_data,size_data,true);
-
         data_next_layer = dataTransition(data,n_data,kernels[0].depth,size_data,kernels,n_kernels,poolingKernel);
         next_bic = bic(bn,data_next_layer,n_data,true,false);
 
         printf("bic reduction: %.1f ==> %.1f \n",current_bic,next_bic);
-        if ( next_bic >= current_bic ){
+        /*if ( next_bic >= current_bic ){
             break;
-        }
+        }*/
         current_bic = next_bic;
     }
 

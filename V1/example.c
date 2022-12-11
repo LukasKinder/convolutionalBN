@@ -10,13 +10,13 @@
 #include "pretrainKernels.h"
 #include "em_algorithm.h"
 
-#define TRAINING_SIZE 10000
+#define TRAINING_SIZE 3000
 
 int main(void){
 
     srand(42);
 
-    if (true){+
+    if (true){
         printf("Loading data...\n");
         bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
         printf("Done!\n");
@@ -24,32 +24,181 @@ int main(void){
         printf("MAIN: init cbn\n");
         ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork();
 
-        addLayerToCbn(cbn,7,mustTMustFEither,2,2);
-        addLayerToCbn(cbn,4,mustTMustFEither,2,2);
-        addLayerToCbn(cbn,4,mustTMustFEither,2,2);
-        addLayerToCbn(cbn,4,mustTMustFEither,2,2);
-        addLayerToCbn(cbn,4,mustTMustFEither,2,2);
+        addLayerToCbn(cbn,7,mustTMustFEither,3,3); //5 * 5, dist = 5
+        addLayerToCbn(cbn,7,mustTMustFEither,3,3); //9 * 9, dist = 9
+        addLayerToCbn(cbn,7,mustTMustFEither,3,3); //13 * 13, dist = 13
+
+        fitCBN(cbn,images,TRAINING_SIZE,1,true);
+
+                printf("MAIN: starting sampling\n");
+
+        int iterations;
+        while (1){
+            printf("iterations for gibbs sampling:\n");
+            scanf("%d",&iterations);
+            if (iterations == 0){
+                break;
+            }
+            
+            //setStateToImage(cbn,images[rand() % TRAINING_SIZE ]);
+            setToRandomState(cbn,0.7);
+            int n_samples = 99;
+            bool *** samples = gibbsSampling(cbn,n_samples,iterations);
+            char name[10] = "sampleXX";
+            for (int i = 0; i < n_samples; i++){
+                name[6] = (char)('0' +  i / 10 );
+                name[7] = (char)('0' +  i % 10);
+                saveImage(samples[i],28,name);
+            }
+            freeImages(samples,n_samples,28);
+        }
+
+        while (1){
+            printf("iterations for SA sampling:\n");
+            scanf("%d",&iterations);
+            if (iterations == 0){
+                break;
+            }
+            
+            setStateToImage(cbn,images[rand() % TRAINING_SIZE]);
+            //setToRandomState(cbn,0.7);
+            int n_samples = 99;
+            bool *** samples = simulatedAnnealing(cbn,n_samples,iterations);
+            char name[10] = "sampleXX";
+            for (int i = 0; i < n_samples; i++){
+                name[6] = (char)('0' +  i / 10 );
+                name[7] = (char)('0' +  i % 10);
+                saveImage(samples[i],28,name);
+            }
+            freeImages(samples,n_samples,28);
+        }
+
+        while (1){
+            printf("iterations for strict climbing:\n");
+            scanf("%d",&iterations);
+            if (iterations == 0){
+                break;
+            }
+            
+            setStateToImage(cbn,images[rand() % TRAINING_SIZE]);
+            //setToRandomState(cbn,0.7);
+            int n_samples = 99;
+
+            bool *** samples = strictClimbing(cbn,n_samples,iterations);
+            char name[10] = "sampleXX";
+            for (int i = 0; i < n_samples; i++){
+                name[6] = (char)('0' +  i / 10 );
+                name[7] = (char)('0' +  i % 10);
+                saveImage(samples[i],28,name);
+            }
+            freeImages(samples,n_samples,28);
+        }
+
+
+        freeImages(images,TRAINING_SIZE,28);
+        freeConvolutionalBayesianNetwork(cbn);
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    if (false){
+        printf("Loading data...\n");
+        bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE);
+        printf("Done!\n");
+
+        printf("MAIN: init cbn\n");
+        ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork();
+
+        addLayerToCbn(cbn,20,mustTMustFEither,3,3);
+        addLayerToCbn(cbn,30,mustTMustFEither,3,3);
+        addLayerToCbn(cbn,50,mustTMustFEither,3,3);
+
+        for(int i = 0; i < cbn->n_layers; i++){
+            printf("depth = %d, size = %d; neighbour distance = %d\n"
+                ,cbn->bayesianNetworks[i]->depth,cbn->bayesianNetworks[i]->size,cbn->bayesianNetworks[i]->distanceRelation);
+        }
 
         printf("MAIN: fit cbn\n");
-        fitCBN(cbn,images,TRAINING_SIZE-1,1,true);
+        fitCBN(cbn,images,TRAINING_SIZE,1,true);
         
 
         printf("MAIN: starting sampling\n");
-        setStateToImage(cbn,images[TRAINING_SIZE -1]);
-        //setToRandomState(cbn,0.7);
-        int n_samples = 99;
-        bool *** samples = gibbsSampling(cbn,n_samples,10000);
-        //bool *** samples = simulatedAnnealing(cbn,n_samples,10000);
-        //bool *** samples = strictClimbing(cbn,n_samples,5000);
 
-        char name[10] = "sampleXX";
-        for (int i = 0; i < n_samples; i++){
-            name[6] = (char)('0' +  i / 10 );
-            name[7] = (char)('0' +  i % 10);
-            saveImage(samples[i],28,name);
+        int iterations;
+        while (1){
+            printf("iterations for gibbs sampling:\n");
+            scanf("%d",&iterations);
+            if (iterations == 0){
+                break;
+            }
+            
+            //setStateToImage(cbn,images[rand() % TRAINING_SIZE ]);
+            setToRandomState(cbn,0.7);
+            int n_samples = 99;
+            bool *** samples = gibbsSampling(cbn,n_samples,iterations);
+            char name[10] = "sampleXX";
+            for (int i = 0; i < n_samples; i++){
+                name[6] = (char)('0' +  i / 10 );
+                name[7] = (char)('0' +  i % 10);
+                saveImage(samples[i],28,name);
+            }
+            freeImages(samples,n_samples,28);
         }
 
-        freeImages(samples,n_samples,28);
+        while (1){
+            printf("iterations for SA sampling:\n");
+            scanf("%d",&iterations);
+            if (iterations == 0){
+                break;
+            }
+            
+            setStateToImage(cbn,images[rand() % TRAINING_SIZE]);
+            //setToRandomState(cbn,0.7);
+            int n_samples = 99;
+            bool *** samples = simulatedAnnealing(cbn,n_samples,iterations);
+            char name[10] = "sampleXX";
+            for (int i = 0; i < n_samples; i++){
+                name[6] = (char)('0' +  i / 10 );
+                name[7] = (char)('0' +  i % 10);
+                saveImage(samples[i],28,name);
+            }
+            freeImages(samples,n_samples,28);
+        }
+
+        while (1){
+            printf("iterations for strict climbing:\n");
+            scanf("%d",&iterations);
+            if (iterations == 0){
+                break;
+            }
+            
+            setStateToImage(cbn,images[rand() % TRAINING_SIZE]);
+            //setToRandomState(cbn,0.7);
+            int n_samples = 99;
+
+            bool *** samples = strictClimbing(cbn,n_samples,iterations);
+            char name[10] = "sampleXX";
+            for (int i = 0; i < n_samples; i++){
+                name[6] = (char)('0' +  i / 10 );
+                name[7] = (char)('0' +  i % 10);
+                saveImage(samples[i],28,name);
+            }
+            freeImages(samples,n_samples,28);
+        }
+
+
+
         freeImages(images,TRAINING_SIZE,28);
         freeConvolutionalBayesianNetwork(cbn);
     }

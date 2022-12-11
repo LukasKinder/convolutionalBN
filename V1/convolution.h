@@ -36,16 +36,19 @@ Kernel createKernel(int size,int depth, KernelType type, int stride, bool paddin
 
     switch (type){
         case mustTMustFEither:
+            bool containsF = false, containsT =false;
             kernel.map = malloc(sizeof(MT_MF_E_Value**) * depth);
             for (int i = 0; i < depth; i++){
                 kernel.map[i] = malloc(sizeof(MT_MF_E_Value*) * size);
                 for (int j = 0; j < size; j ++){
                     kernel.map[i][j] = malloc(sizeof(MT_MF_E_Value) * size);
                     for (int k = 0; k < size; k ++){
-                        int randomNumber = rand() % (size * size * depth) ;
+                        int randomNumber = rand() % (size * size * depth);
                         if (randomNumber <2){
+                            containsT = true;
                             kernel.map[i][j][k] = must_true;
-                        } else if (randomNumber <4){
+                        } else if (randomNumber <6){
+                            containsF = true;
                             kernel.map[i][j][k] = must_false;
                         } else {
                             kernel.map[i][j][k] = either;
@@ -53,6 +56,14 @@ Kernel createKernel(int size,int depth, KernelType type, int stride, bool paddin
                     }
                 }
             }
+            //at least one mustT and mustF
+            if (!containsT){
+                kernel.map[rand() % depth][rand() % size][rand() % size] = must_true;
+            }
+            if (!containsF){
+                kernel.map[rand() % depth][rand() % size][rand() % size] = must_false;
+            }
+
             break;
         case weighted:
             kernel.weights = malloc(sizeof(float**) * depth);
@@ -162,7 +173,6 @@ bool ** applyMaxPoolingOneLayer(bool ** data, int data_size, Kernel kernel){
         newData[i] = malloc(sizeof(bool) * newSize);
     }
 
-    #pragma omp parallel for collapse(2)
     for (int x = 0; x < newSize; x++){
         for (int y = 0; y < newSize; y++){
             int responseX = x * kernel.stride - (kernel.padding ? kernel.size -1: 0);

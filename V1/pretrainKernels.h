@@ -1,7 +1,7 @@
 
-#define PRETRAINING_ITERATION_PER_PARAMETER  10 //suggested: 10
-#define PRETRAINING_N_DATA 100 //suggested: 100
-#define PRETRAINING_N_INIT_IMAGES 2 //suggested 10
+#define PRETRAINING_ITERATION_PER_PARAMETER  1 //suggested: 10
+#define PRETRAINING_N_DATA 50 //suggested: 100
+#define PRETRAINING_N_INIT_IMAGES 10 //suggested 10
 
 //TODO: run with openmp
 
@@ -144,7 +144,7 @@ void initKernelsToMeaningful(Kernel * kernels, int n_kernels,bool ****data_previ
     while (!all_meaningful){
         if (it == 10000){
             if (verbose) printf("Failed to find meaningful kernels\n",it);
-            break
+            break;
         }
 
         if (verbose) printf("Searching for meaningful kernels (iteration %d)\n",it);
@@ -153,7 +153,7 @@ void initKernelsToMeaningful(Kernel * kernels, int n_kernels,bool ****data_previ
         newData = dataTransition(data_previous,n_testing,kernels[0].depth,size_data,kernels,n_kernels,non_pooling_kernel );
         for (int i = 0; i < n_kernels; i++){
             mean =  meanKernelValues(newData,n_testing,i,new_size);
-            if (mean < 0.01 || mean > 0.99){
+            if (mean < 0.0001 || mean > 0.05){
                 //too rare, not meaningful
                 old_kernel = kernels[i];
                 kernels[i] = createKernel(old_kernel.size,old_kernel.depth,old_kernel.type,old_kernel.stride,old_kernel.padding);
@@ -178,6 +178,8 @@ void pretrainKernels(Kernel * kernels, int n_kernels, Kernel poolingKernel
     if (verbose) printf("Pretrain Kernels\n");
 
     initKernelsToMeaningful(kernels,n_kernels,data_previous,n_data,size_data,verbose);
+
+    return;
 
     //number of iterations is 10 times the amount of parameters
     int n_iterations = (int) (PRETRAINING_ITERATION_PER_PARAMETER 

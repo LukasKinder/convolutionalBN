@@ -114,6 +114,7 @@ bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iter
     samples[0] = getImageFromState(cbn);
 
     for (int i = 1; i < n_samples; i++){
+        printf("%d%\n",i);
         for (int j = 0; j < iterations / n_samples; j++){
 
             x = rand() % image_size;
@@ -154,6 +155,7 @@ bool *** simulatedAnnealing(ConvolutionalBayesianNetwork cbn, int n_samples, int
     samples[0] = getImageFromState(cbn);
 
     for (int i = 1; i < n_samples; i++){
+        printf("%d%\n",i);
         for (int j = 0; j < (int)(n_iterations / n_samples); j++){
             iteration++;
 
@@ -189,6 +191,7 @@ bool *** strictClimbing(ConvolutionalBayesianNetwork cbn, int n_samples, int n_i
     samples[0] = getImageFromState(cbn);
 
     for (int i = 1; i < n_samples; i++){
+        printf("%d%\n",i);
         for (int j = 0; j < (int)(n_iterations / n_samples); j++){
 
             x = rand() % image_size;
