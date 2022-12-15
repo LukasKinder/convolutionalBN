@@ -230,8 +230,8 @@ void pretrainKernels(Kernel * kernels, int n_kernels, Kernel poolingKernel
         #pragma omp parallel for
         for(int i =0; i < usedData; i++){
             freeImage(newData[i][index_rand_kernel],size_after);
-            bool ** intermediate_result  = applyConvolution(data_previous[i],size_data,randomKernel);
-            newData[i][index_rand_kernel] = applyMaxPoolingOneLayer(intermediate_result,size_after_normal_kernels,poolingKernel);
+            bool ** intermediate_result  = applyConvolution(data_previous[i],size_data,size_data,randomKernel);
+            newData[i][index_rand_kernel] = applyMaxPoolingOneLayer(intermediate_result,size_after_normal_kernels,size_after_normal_kernels,poolingKernel);
             freeImage(intermediate_result,size_after_normal_kernels);
         }
         

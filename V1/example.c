@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "my_mnist.h"
+#include "my_utils.h"
 #include "convolution.h"
 #include "dataAnalysis.h"
 #include "bayesianNetwork.h"
@@ -10,11 +11,11 @@
 #include "pretrainKernels.h"
 #include "em_algorithm.h"
 
-#define TRAINING_SIZE 3000
+#define TRAINING_SIZE 500
 
 int main(void){
 
-    srand(42);
+    srand(2);
 
     if (true){
         printf("Loading data...\n");
@@ -24,13 +25,27 @@ int main(void){
         printf("MAIN: init cbn\n");
         ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork();
 
-        addLayerToCbn(cbn,7,mustTMustFEither,3,3); //5 * 5, dist = 5
-        addLayerToCbn(cbn,7,mustTMustFEither,3,3); //9 * 9, dist = 9
-        addLayerToCbn(cbn,7,mustTMustFEither,3,3); //13 * 13, dist = 13
+        addLayerToCbn(cbn,8,mustTMustFEither,3,3); 
+        addLayerToCbn(cbn,8,mustTMustFEither,3,3); 
+        addLayerToCbn(cbn,8,mustTMustFEither,3,3); 
 
         fitCBN(cbn,images,TRAINING_SIZE,1,true);
 
-                printf("MAIN: starting sampling\n");
+        setStateToImage(cbn,images[rand() % TRAINING_SIZE]);
+        int X,Y;
+        for (int i = 0; i < 10; i++){
+            printf("give pixel cordinates\n");
+            scanf("%d",&X);
+            scanf("%d",&Y);
+            printf("%d %d: ",X,Y);
+            printf("Overall: %f\n", probabilityPixelTrue(cbn,cbn->bayesianNetworks[0]->nodes[0][X][Y]));
+        }
+        return 0 ;
+
+
+        //saveBestWorst(images,TRAINING_SIZE,10,cbn);
+
+        printf("MAIN: starting sampling\n");
 
         int iterations;
         while (1){
@@ -92,7 +107,7 @@ int main(void){
                 saveImage(samples[i],28,name);
             }
             freeImages(samples,n_samples,28);
-        }
+        } 
 
 
         freeImages(images,TRAINING_SIZE,28);

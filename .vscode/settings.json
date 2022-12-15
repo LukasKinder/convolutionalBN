@@ -4,6 +4,10 @@
         "em_algorithm.h": "c",
         "inference.h": "c",
         "dataanalysis.h": "c",
-        "stdio.h": "c"
-    }
+        "stdio.h": "c",
+        "bayesiannetwork.h": "c"
+    },
+    "cSpell.words": [
+        "Supersmalls"
+    ]
 }

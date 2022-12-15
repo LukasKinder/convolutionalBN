@@ -159,29 +159,30 @@ int sizeAfterConvolution(int originalSize, Kernel kernel){
 }
 
 //depth of kernel may not by 1
-bool ** applyMaxPoolingOneLayer(bool ** data, int data_size, Kernel kernel){
+bool ** applyMaxPoolingOneLayer(bool ** data, int data_size_x,int data_size_y, Kernel kernel){
     if (kernel.type != pooling){
         printf("wrong type of kernel for pooling");
     }
 
-    int newSize = sizeAfterConvolution(data_size,kernel);
+    int newSize_x = sizeAfterConvolution(data_size_x,kernel);
+    int newSize_y = sizeAfterConvolution(data_size_y,kernel);
     int x,y,i,j,responseX,responseY;
     bool isFalse;
 
-    bool ** newData = malloc(sizeof(bool *) * newSize);
-    for (i = 0; i < newSize; i++){
-        newData[i] = malloc(sizeof(bool) * newSize);
+    bool ** newData = malloc(sizeof(bool *) * newSize_x);
+    for (i = 0; i < newSize_x; i++){
+        newData[i] = malloc(sizeof(bool) * newSize_y);
     }
 
-    for (int x = 0; x < newSize; x++){
-        for (int y = 0; y < newSize; y++){
+    for (int x = 0; x < newSize_x; x++){
+        for (int y = 0; y < newSize_y; y++){
             int responseX = x * kernel.stride - (kernel.padding ? kernel.size -1: 0);
             int responseY = y * kernel.stride - (kernel.padding ? kernel.size -1: 0);
             bool isFalse = false;
             for (i = responseX; i < responseX +  kernel.size; i++){
                 for (j = responseY; j < responseY + kernel.size; j++){
 
-                    if (i < 0 || j < 0 || i>=data_size || j >= data_size){
+                    if (i < 0 || j < 0 || i>=data_size_x || j >= data_size_y){
                         continue;; //out of bound because of padding
                     } else {
                         isFalse = isFalse || data[i][j];
@@ -206,7 +207,7 @@ bool *** applyMaxPooling(bool ***data, int data_size, Kernel kernel){
 
     #pragma omp parallel for
     for (int d = 0; d < kernel.depth; d++){
-        newData[d] = applyMaxPoolingOneLayer(data[d],data_size,kernel);
+        newData[d] = applyMaxPoolingOneLayer(data[d],data_size,data_size,kernel);
     }
 
     return newData;
@@ -215,20 +216,21 @@ bool *** applyMaxPooling(bool ***data, int data_size, Kernel kernel){
 
 //Todo: rewrite with openmp
 //applies convolution with weighted or mustTmustFE kernel
-bool ** applyConvolution(bool*** data, int data_size, Kernel kernel){
+bool ** applyConvolution(bool*** data, int data_size_x, int data_size_y, Kernel kernel){
 
     int responseX, responseY,x,y,i,j,d;
-    int newSize = sizeAfterConvolution(data_size,kernel);
+    int newSize_x = sizeAfterConvolution(data_size_x,kernel);
+    int newSize_y = sizeAfterConvolution(data_size_y,kernel);
     bool value, resultsTrue;
     float sum;
 
-    bool** new_data = malloc(sizeof(bool*) * newSize);
-    for (int i = 0; i < newSize; i++){
-        new_data[i] = malloc(sizeof(bool) * newSize);
+    bool** new_data = malloc(sizeof(bool*) * newSize_x);
+    for (int i = 0; i < newSize_x; i++){
+        new_data[i] = malloc(sizeof(bool) * newSize_y);
     }
 
-    for (x = 0; x < newSize; x++){
-        for (y = 0; y < newSize; y++){
+    for (x = 0; x < newSize_x; x++){
+        for (y = 0; y < newSize_y; y++){
 
             responseX = x * kernel.stride - (kernel.padding ? kernel.size -1: 0);
             responseY = y * kernel.stride - (kernel.padding ? kernel.size -1: 0);
@@ -240,7 +242,7 @@ bool ** applyConvolution(bool*** data, int data_size, Kernel kernel){
                     for (i = responseX; i < responseX +  kernel.size; i++){
                         for (j = responseY; j < responseY + kernel.size; j++){
 
-                            if (i < 0 || j < 0 || i>=data_size || j >= data_size){
+                            if (i < 0 || j < 0 || i>=data_size_x || j >= data_size_y){
                                 value = false; //out of bound because of padding
                             } else {
                                 value = data[d][i][j];
@@ -269,7 +271,7 @@ bool ** applyConvolution(bool*** data, int data_size, Kernel kernel){
                 for (d = 0; d < kernel.depth; d++){
                     for (i = responseX; i < responseX +  kernel.size; i++){
                         for (j = responseY; j < responseY + kernel.size; j++ ){
-                            if (i < 0 || j < 0 || i>=data_size || j >= data_size){
+                            if (i < 0 || j < 0 || i>=data_size_x || j >= data_size_y){
                                 value = false; //out of bound because of padding
                             } else {
                                 value = data[d][i][j];
@@ -302,7 +304,7 @@ bool **** dataTransition(bool **** dataPrevious, int n_instances, int depth, int
     for (int  i = 0; i < n_instances; i++){
         for (int j = 0; j < n_kernels;j++){
             k = kernels[j]; 
-            newData[i][j] = applyConvolution(dataPrevious[i],size,k);
+            newData[i][j] = applyConvolution(dataPrevious[i],size,size,k);
         }
 
         if (poolingKernel.size != 1){

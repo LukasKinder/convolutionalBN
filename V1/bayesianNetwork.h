@@ -1,5 +1,4 @@
 
-#include <math.h>
 
 typedef struct RawNode *Node;
 
@@ -48,6 +47,28 @@ Node initNode(int depth, int x, int y){
 
 void freeNode(Node n){
     free(n);
+}
+
+int binaryToInt(bool* binaryNumber, int size){
+    int result = 0;
+    for (int i = 0; i < size; i++){
+        result = result*2 + (binaryNumber[i] ? 1 : 0);
+    }
+    return result;
+}
+
+double probabilityGivenParents(Node n){
+    bool * parent_states = malloc(sizeof(bool) * n->n_parents);
+    double result;
+    for (int i = 0; i < n->n_parents; i++){
+        parent_states[i] = n->parents[i]->value;
+    }
+    result = n->CPT[binaryToInt(parent_states,n->n_parents)];
+    if (! n->value){
+        result = 1 - result;
+    }
+    free(parent_states);
+    return result;
 }
 
 void printBayesianNetwork(BayesianNetwork bn){
@@ -99,6 +120,19 @@ void setStateToData(BayesianNetwork bn, bool *** data){
             }
         }
     }
+}
+
+float logProbabilityStateBN(BayesianNetwork bn){
+    float prob = 0;
+    int d,x,y;
+    for(int d = 0; d < bn->depth; d++){
+        for(x = 0; x < bn->size; x++){
+            for( y = 0; y < bn->size; y++){
+                prob += log( probabilityGivenParents(bn->nodes[d][x][y]) );
+            }
+        }
+    }
+    return prob;
 }
 
 BayesianNetwork createBayesianNetwork(int size, int depth, int distance_relation){
@@ -178,13 +212,6 @@ void addAllDependencies(BayesianNetwork bn, int neighbourDistance, bool diagonal
     }
 }
 
-int binaryToInt(bool* binaryNumber, int size){
-    int result = 0;
-    for (int i = 0; i < size; i++){
-        result = result*2 + (binaryNumber[i] ? 1 : 0);
-    }
-    return result;
-}
 
 //resets it to reverse any training, frees counts/CPT/parents
 void resetBayesianNetwork(BayesianNetwork bn){

@@ -162,7 +162,7 @@ void setStateToImage(ConvolutionalBayesianNetwork cbn ,bool ** image){
 
         for (int j = 0; j < bn->depth; j++){
             k = cbn->transitionalKernels[i][j]; 
-            data[j] = applyConvolution(tmp,currentSize,k);
+            data[j] = applyConvolution(tmp,currentSize,currentSize,k);
         }
 
         if (i != 0){
@@ -195,6 +195,14 @@ void setToRandomState(ConvolutionalBayesianNetwork cbn, float fractionBlack){
     
     setStateToImage(cbn,randomImage);
     freeImage(randomImage,28);
+}
+
+float logProbabilityStateCBN(ConvolutionalBayesianNetwork cbn){
+    float prob = 0;
+    for ( int i = 0; i < cbn->n_layers; i++){
+        prob += logProbabilityStateBN(cbn->bayesianNetworks[i]);
+    }
+    return prob;
 }
 
 

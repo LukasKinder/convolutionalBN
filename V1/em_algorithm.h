@@ -1,6 +1,6 @@
 
 
-#define MAX_ITERATIONS_EM 500 //default 5
+#define MAX_ITERATIONS_EM 2 //default 5
 #define KERNEL_SEARCH_ITERATION_PER_PARAMETER 2 //default 10
 #define MAX_ITERATIONS_STRUCTURE_SEARCH 10 //default 15
 #define KERNEL_OPTIMIZATION_LOCAL_SEARCH false
@@ -270,9 +270,9 @@ void optimizeKernelsTryOut(BayesianNetwork bn, Kernel * kernels, int n_kernels, 
         //free the data of the old kernel
         for (j = 0; j < n_used; j++){
             freeImage(data_after[j][worstKernel],bn->size);
-            tmp = applyConvolution(data_before[j],size_before,new_kernel);
+            tmp = applyConvolution(data_before[j],size_before,size_before,new_kernel);
 
-            data_after[j][worstKernel] = applyMaxPoolingOneLayer(tmp,tmp_size,poolingKernel);
+            data_after[j][worstKernel] = applyMaxPoolingOneLayer(tmp,tmp_size,tmp_size,poolingKernel);
             freeImage(tmp,tmp_size);
         }
         mean = meanKernelValues(data_after,n_used,worstKernel,bn->size);
@@ -367,8 +367,8 @@ bool optimizeKernels(BayesianNetwork bn, Kernel * kernels, int n_kernels
         #pragma omp parallel for
         for(int i =0; i < n_data; i++){
             freeImage(newData[i][index_rand_kernel],size_after);
-            bool ** intermediate_result  = applyConvolution(data[i],size_data,randomKernel);
-            newData[i][index_rand_kernel] = applyMaxPoolingOneLayer(intermediate_result,size_after_normal_kernels,poolingKernel);
+            bool ** intermediate_result  = applyConvolution(data[i],size_data,size_data,randomKernel);
+            newData[i][index_rand_kernel] = applyMaxPoolingOneLayer(intermediate_result,size_after_normal_kernels,size_after_normal_kernels,poolingKernel);
             freeImage(intermediate_result,size_after_normal_kernels);
         }
         
