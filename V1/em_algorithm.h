@@ -400,9 +400,6 @@ void em_algorithm(BayesianNetwork bn, Kernel * kernels, int n_kernels, Kernel po
     pretrainKernels(kernels,n_kernels,poolingKernel,data,n_data,size_data,bn->distanceRelation,true);
     bool **** data_next_layer = dataTransition(data,n_data,kernels[0].depth,size_data,kernels,n_kernels,poolingKernel);
 
-    float current_bic = bic(bn,data_next_layer,n_data,true,false);
-    float next_bic;
-
     printf("Running EM algorithm\n");
 
     for (int i = 0; i < MAX_ITERATIONS_EM ; i++){
@@ -418,13 +415,6 @@ void em_algorithm(BayesianNetwork bn, Kernel * kernels, int n_kernels, Kernel po
         }
         freeLayeredImages(data_next_layer,n_data,bn->depth,bn->size);
         data_next_layer = dataTransition(data,n_data,kernels[0].depth,size_data,kernels,n_kernels,poolingKernel);
-        next_bic = bic(bn,data_next_layer,n_data,true,false);
-
-        printf("bic reduction: %.1f ==> %.1f \n",current_bic,next_bic);
-        /*if ( next_bic >= current_bic ){
-            break;
-        }*/
-        current_bic = next_bic;
     }
 
     printf("Found Kernels:\n");

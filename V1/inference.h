@@ -1,9 +1,12 @@
 
 
+#define STOP_IF_CERTAIN_LAYER 0.05
+#define SOOTHE_PREDICTION_NEXT_LAYER 0.3
+
 //assumes not stride or padding for now, assumes MUSTIN OUT EITHER KERNEL
 //assumes no stride!! (TODO)
 // TODO maybe use omp
-void propagateChangeInRegionUp(ConvolutionalBayesianNetwork cbn, int lower_x, int lower_y,int upper_x,int upper_y, int layer){
+void propagateChangeInRegionUp(ConvolutionalBayesianNetwork cbn, int lower_x, int lower_y,int upper_x,int upper_y, int layer, int changeId){
     if (layer >= cbn->n_layers-1){
         //there is not layer above this one
         return;
@@ -83,6 +86,7 @@ void propagateChangeInRegionUp(ConvolutionalBayesianNetwork cbn, int lower_x, in
                 n2 = cbn->bayesianNetworks[layer +1]->nodes[d][upper_left_corner_image_x + x][upper_left_corner_image_y + y];
                 if (n2->value != is_true){
                     n2->value = is_true;
+                    n2->changeID = changeId;
                     value_changed = true;
                     if (min_x_change > n2->x) min_x_change = n2->x;
                     if (min_y_change > n2->y) min_y_change = n2->y;
@@ -99,17 +103,17 @@ void propagateChangeInRegionUp(ConvolutionalBayesianNetwork cbn, int lower_x, in
     free(after_transitional_representation);
 
     if (value_changed){
-        propagateChangeInRegionUp(cbn,min_x_change,min_y_change,max_x_change,max_y_change,layer+1);
+        propagateChangeInRegionUp(cbn,min_x_change,min_y_change,max_x_change,max_y_change,layer+1, changeId);
     }
 }
 
 //assumes that node n was changed which requires propagating this change in values of higher-layer nodes
-void propagatePixelChangeUp(ConvolutionalBayesianNetwork cbn, Node n, int layer){
+void propagatePixelChangeUp(ConvolutionalBayesianNetwork cbn, Node n, int layer, int changeId){
     if (layer == cbn->n_layers){
         //there is not layer above this one
         return;
     }
-    propagateChangeInRegionUp(cbn,n->x,n->y,n->x +1, n->y +1,0);
+    propagateChangeInRegionUp(cbn,n->x,n->y,n->x +1, n->y +1,0,changeId);
 }
 
 
@@ -155,71 +159,143 @@ Node * effectedNodesOfPixel(ConvolutionalBayesianNetwork cbn, int pixel_x, int p
     return effectedNodes;
 }
 
-//might suffer from numerical underflow
-float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n){
-    bool currentValue = n->value;
-    int n_effected_nodes;
+//TODO: Lot's of tuning!
+float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n, bool verbose){
+    float prob_current = probabilityGivenParents(n) * probabilityOfChildren(n);
+    n->value = ! n->value;
+    float prob_other = probabilityGivenParents(n) * probabilityOfChildren(n);
+    n->value = ! n->value;
+    float prob_true = n->value ? prob_current / (prob_current + prob_other) : prob_other / (prob_current + prob_other);
+    if (verbose) printf("probability to be true just based on layer 0 is %f\n", prob_true);
+    if (prob_true < STOP_IF_CERTAIN_LAYER || prob_true > 1 - STOP_IF_CERTAIN_LAYER ){
+        if (verbose) printf("This is certain enough to not consider the other layers\n");
+        return prob_true;
+    }
 
-    float * prob_true_layers = calloc(sizeof(float), cbn->n_layers);
-    float* prob_false_layers = calloc(sizeof(float), cbn->n_layers);
+    bool currentValue = n->value;
+
+    int c;
+
+    int * n_effected_nodes_layers = malloc(sizeof(int) * cbn->n_layers);
+    Node ** effected_nodes_layers = malloc(sizeof(Node *) * cbn->n_layers);
+    float ** prob_true_layers = malloc(sizeof(float*)* cbn->n_layers);
+    float ** prob_false_layers = malloc(sizeof(float*)* cbn->n_layers);
+    int * size_relevant_nodes_layers = malloc(sizeof(int) * cbn->n_layers);
+    Node ** relevant_nodes_at_layers = malloc(sizeof(Node *) * cbn->n_layers);
+    for(int i = 0; i < cbn->n_layers; i++){
+        size_relevant_nodes_layers[i] = 0;
+        effected_nodes_layers[i] = effectedNodesOfPixel(cbn,n->x,n->y,i,&n_effected_nodes_layers[i]);
+    }
+
 
     Node n2;
-    double intermediate;
-
-    int n_effected_nodes_layer[10]; //Todo remove
-
+    int changeId = rand();
     for (int b = 0; b < 2; b++){
+        n->value = !n->value;
+        n->changeID = changeId;
+        propagatePixelChangeUp(cbn,n,0,changeId);
+
         for (int i = 0; i < cbn->n_layers; i++){
-            Node * effectedNodes = effectedNodesOfPixel(cbn,n->x,n->y,i,&n_effected_nodes);
-            n_effected_nodes_layer[i] = n_effected_nodes;
-            for (int j = 0; j < n_effected_nodes; j++){
-                n2 = effectedNodes[j];
-                if (n->value){
-
-                    intermediate = probabilityGivenParents(n2);
-                    prob_true_layers[i] += intermediate;
-                    intermediate = probabilityOfChildren(n2);
-                    prob_true_layers[i] += intermediate;
-
-                    //printf("True based on own = %f, true based on children = %f\n",probabilityGivenParents(n),probabilityOfChildren(n));
-                }else {
-                    
-                    intermediate = probabilityGivenParents(n2);
-                    prob_false_layers[i] += intermediate;
-                    intermediate = probabilityOfChildren(n2);
-                    prob_false_layers[i] += intermediate;
-                    //rintf("False based on own = %f, False based on children = %f\n",probabilityGivenParents(n),probabilityOfChildren(n));
+            if (b == 0){
+                for (int j = 0; j < n_effected_nodes_layers[i]; j++){
+                    n2 = effected_nodes_layers[i][j];
+                    if (n2->changeID != changeId){
+                        //node was not changed in this iteration
+                        continue;
+                    }
+                    size_relevant_nodes_layers[i]++;;
+                }
+                prob_true_layers[i] = malloc(sizeof(float) * size_relevant_nodes_layers[i]);
+                prob_false_layers[i] = malloc(sizeof(float) * size_relevant_nodes_layers[i]);
+                relevant_nodes_at_layers[i] = malloc(sizeof(Node) * size_relevant_nodes_layers[i]);
+                c = 0;
+                for (int j = 0; j < n_effected_nodes_layers[i]; j++){
+                    n2 = effected_nodes_layers[i][j];
+                    if (n2->changeID != changeId){
+                        //node was not changed in this iteration
+                        continue;
+                    }
+                    relevant_nodes_at_layers[i][c] = n2;
+                    c++;
                 }
             }
-            free(effectedNodes);
+
+            for( int j = 0; j < size_relevant_nodes_layers[i]; j++){
+
+                if (n->value){
+                    prob_true_layers[i][j] = probabilityGivenParents(relevant_nodes_at_layers[i][j])
+                        * probabilityOfChildren(relevant_nodes_at_layers[i][j]);
+                }else {
+                    prob_false_layers[i][j] = probabilityGivenParents(relevant_nodes_at_layers[i][j])
+                        * probabilityOfChildren(relevant_nodes_at_layers[i][j]);
+                }
+            }
         }
-        n->value = !n->value;
-        propagatePixelChangeUp(cbn,n,0); //would maybe be more efficient to only reverse it if new state is really not accepted
     }
 
-    SuperSmall prob_true = initSuperSmall(1.0); // maybe init with very large number to prevent numerical underflow
-    SuperSmall prob_false = initSuperSmall(1.0);
+    float weighted_average,smoothed_average, overall_result = 0.5, p1,p2;
     for (int i = 0; i < cbn->n_layers; i++){
-        //additive or multiplicative???
 
-        prob_true_layers[i] /= n_effected_nodes_layer[i] *2;
-        prob_false_layers[i] /= n_effected_nodes_layer[i] *2;
+        if (verbose) {
+            printf("In layer %d: \n",i);
+            printf("%d nodes could change value, %d did\n"
+                ,n_effected_nodes_layers[i],size_relevant_nodes_layers[i]); 
+        }
 
-        multiplySuperSmallF(&prob_true, prob_true_layers[i]);
-        multiplySuperSmallF(&prob_false, prob_false_layers[i]);
-        //prob_true = addSupersmalls(prob_true, prob_true_layers[i]);
-        //prob_false = addSupersmalls(prob_false, prob_false_layers[i]);
+        if (size_relevant_nodes_layers[i] == 0){
+            if (verbose) printf("break because no change in this or upper layers\n");
+            break;
+        }
 
-        printf("Based on layer %d, prob true = %f (true:%f / false:%f) ",i
-            ,prob_true_layers[i] / (prob_true_layers[i] +prob_false_layers[i]) 
-            ,prob_true_layers[i], prob_false_layers[i]); 
-        printf("n_ effected nodes = %d\n",n_effected_nodes_layer[i]);
+        //results of different nodes are dependent. Use average instead of multiplication
+        weighted_average = 0.0;
+        for(int j = 0; j <size_relevant_nodes_layers[i]; j++){
 
+            weighted_average += (prob_true_layers[i][j] / (prob_true_layers[i][j] + prob_false_layers[i][j]));
+        }
+
+        weighted_average /= size_relevant_nodes_layers[i];
+        if (verbose)  printf("Average prob this layer: %f \n", weighted_average);
+        
+        if (i != 0){
+            //result may be dependent with existing, so make result in this layer less extreme
+            p1 = pow(weighted_average, SOOTHE_PREDICTION_NEXT_LAYER );
+            p2 = pow(1 - weighted_average, SOOTHE_PREDICTION_NEXT_LAYER );
+
+            smoothed_average = p1 / (p1+p2);
+            if (verbose)  printf("Average prob this layer after smoothing: %f \n", smoothed_average);
+        }else {
+            smoothed_average = weighted_average;
+        }
+
+        overall_result = (overall_result * smoothed_average) 
+            / (overall_result * smoothed_average + (1-overall_result ) * (1-smoothed_average));
+
+        if (verbose)  printf("Overall result after updating: %f \n", overall_result);
+
+        if (weighted_average < STOP_IF_CERTAIN_LAYER || weighted_average > 1 - STOP_IF_CERTAIN_LAYER){
+            //no point in testing next layer
+            if (verbose) printf("break because already certain enough to not consider higher layers\n");
+            break;
+        }
     }
 
-    //printf("prob True = %f; prob false = %f\n",prob_true,prob_false);
+    if (verbose) printf("Final result: %f\n", overall_result);
 
-    return divideSuperSmalls(prob_true,  addSupersmalls(prob_true, prob_false) ) ;
+    for(int i = 0; i < cbn->n_layers; i++){
+        free(prob_true_layers[i]);
+        free(prob_false_layers[i]);
+        free(effected_nodes_layers[i]);
+        free(relevant_nodes_at_layers[i]);
+    }
+    free(n_effected_nodes_layers);
+    free(effected_nodes_layers);
+    free(prob_true_layers);
+    free(prob_false_layers);
+    free(size_relevant_nodes_layers);
+    free(relevant_nodes_at_layers);
+
+    return overall_result;
 }
 
 
@@ -245,12 +321,12 @@ bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iter
             n = cbn->bayesianNetworks[0]->nodes[0][x][y];
             value_before = n->value;
 
-            probTrue = probabilityPixelTrue(cbn,n);
+            probTrue = probabilityPixelTrue(cbn,n,false);
 
             n->value = (float)rand() / (float)RAND_MAX < probTrue;
             
             if (n->value != value_before){
-                propagatePixelChangeUp(cbn,n,0);
+                propagatePixelChangeUp(cbn,n,0,1);
             }
         }
 
@@ -285,14 +361,14 @@ bool *** simulatedAnnealing(ConvolutionalBayesianNetwork cbn, int n_samples, int
 
             n = cbn->bayesianNetworks[0]->nodes[0][x][y];
 
-            probTrue = probabilityPixelTrue(cbn,n);
+            probTrue = probabilityPixelTrue(cbn,n,false);
             deltaProb = n->value ? - 2 * (probTrue - 0.5 ) : 2 * (probTrue - 0.5 ) ;
 
             temperature =  iterationToTemperature(iteration,n_iterations);
 
             if ( deltaProb > 0 || (float)rand() / (float)RAND_MAX < pow(2.71828, deltaProb / temperature)){
                 n->value = !n->value;
-                propagatePixelChangeUp(cbn,n,0);
+                propagatePixelChangeUp(cbn,n,0,3);
             }
         }
 
@@ -320,13 +396,13 @@ bool *** strictClimbing(ConvolutionalBayesianNetwork cbn, int n_samples, int n_i
 
             n = cbn->bayesianNetworks[0]->nodes[0][x][y];
 
-            probTrue = probabilityPixelTrue(cbn,n);
+            probTrue = probabilityPixelTrue(cbn,n,false);
             deltaProb = n->value ? - 2 * (probTrue - 0.5 ) : 2 * (probTrue - 0.5 ) ;
 
 
             if ( deltaProb > 0){
                 n->value = !n->value;
-                propagatePixelChangeUp(cbn,n,0);
+                propagatePixelChangeUp(cbn,n,0,4);
             }
         }
 

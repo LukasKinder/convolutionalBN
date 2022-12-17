@@ -15,6 +15,8 @@ typedef struct RawNode {
     int n_parents;
     int n_children;
 
+    int changeID; //id that is set when the value of a node is changes.
+
     int* stateCountsTrue; // maps parent configuration as index (binary number) to counts to be true
     int* stateCountsFalse; // maps parent configuration as index (binary number) to counts to be false
     float* CPT; // maps parent configuration as index (binary number) to probability to be true
@@ -42,6 +44,7 @@ Node initNode(int depth, int x, int y){
     n->y = y;
     n->n_parents = 0;
     n->n_children = 0;
+    n->changeID = 0;
     return n; 
 }
 
@@ -54,6 +57,18 @@ int binaryToInt(bool* binaryNumber, int size){
     for (int i = 0; i < size; i++){
         result = result*2 + (binaryNumber[i] ? 1 : 0);
     }
+    return result;
+}
+
+int counts_used_given_parents(Node n){
+    bool * parent_states = malloc(sizeof(bool) * n->n_parents);
+    int result;
+    for (int i = 0; i < n->n_parents; i++){
+        parent_states[i] = n->parents[i]->value;
+    }
+    result = n->stateCountsTrue[binaryToInt(parent_states,n->n_parents)];
+    result += n->stateCountsFalse[binaryToInt(parent_states,n->n_parents)];
+    free(parent_states);
     return result;
 }
 

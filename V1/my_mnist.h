@@ -93,12 +93,22 @@ bool*** readImages(char *file_path, int num_data){
 
 void printImage(bool** image, int size){
 
-    for (int i = 0; i < size +2; i++){
-        printf("--");
+    printf("    ");
+    for (int i = 0; i < size; i++){
+        if (i >= 10){
+            printf("%d",i);
+        }else {
+            printf("%d ",i);
+        }
     }
-    printf("\n");
+    printf("  \n");
 
     for (int x = 0; x < size; x ++){
+        if (x >= 10){
+            printf("%d",x);
+        }else {
+            printf("%d ",x);
+        }
         printf("| ");
         for (int y =0; y < size; y ++){
             if (image[x][y]) {
