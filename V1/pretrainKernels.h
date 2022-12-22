@@ -62,16 +62,6 @@ float meanKernelValues(bool **** data, int n_data, int kernel_depth, int size){
 
 
 float varianceKernelValues(bool **** data, int n_data, int kernel_depth, int size, float mean){
-    /* float variance = 0;
-    int i,j,k;
-    for ( i  =0; i < n_data; i++){
-        for (j = 0; j < size; j++){
-            for (k = 0; k < size; k++){
-                variance += pow((data[i][kernel_depth][j][k] ? 1.0 :0.0) - mean , 2); 
-            }
-        }
-    }
-    return variance / (n_data *size * size); */ 
 
     int n_1 = (int)( (n_data *size * size) * mean);
     int n_0 = (n_data *size * size) -n_1;
