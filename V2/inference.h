@@ -412,11 +412,11 @@ bool *** strictClimbing(ConvolutionalBayesianNetwork cbn, int n_samples, int n_i
 }
 
 
-void saveBestWorst(bool *** images, int n_images, int n_best ,ConvolutionalBayesianNetwork cbn){
+/* void saveBestWorst(bool *** images, int n_images, int n_best ,ConvolutionalBayesianNetwork cbn){
     float * image_probs = malloc(sizeof(float) * n_images);
     for(int i = 0; i < n_images; i++){
         setStateToImage(cbn,images[i]);
-        image_probs[i] = logProbabilityStateCBN(cbn);
+        image_probs[i] = logProbabilityStateCBN(cbn); //TODO UPDATE, in order to implement depenent
     }
 
     //save the best,worst
@@ -451,4 +451,4 @@ void saveBestWorst(bool *** images, int n_images, int n_best ,ConvolutionalBayes
 
     }
     free(image_probs);
-}
+} */

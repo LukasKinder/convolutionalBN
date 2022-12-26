@@ -89,6 +89,45 @@ bool*** readImages(char *file_path, int num_data, float threshold){
     return images;
 }
 
+int * readLabels(char *file_path, int num_data){
+    int info_arr[MNIST_LEN_INFO_LABEL];
+
+    int i, j, k, fd;
+    unsigned char *ptr;
+
+    if ((fd = open(file_path, O_RDONLY)) == -1) {
+        fprintf(stderr, "couldn't open image file");
+        exit(-1);
+    }
+
+    
+    read(fd, info_arr, MNIST_LEN_INFO_LABEL * sizeof(int));
+
+    unsigned char** data_char = malloc(sizeof(unsigned char*) * num_data);
+    for (int i =0; i < num_data; i++){
+        data_char[i] = malloc(sizeof(unsigned char) * 1);
+    }
+
+    // read-in mnist numbers (pixels|labels)
+    for (i=0; i<num_data; i++) {
+        read(fd, data_char[i], 1 * sizeof(unsigned char));   
+    }
+
+    int * labels = malloc(sizeof(int) * num_data);
+    for (int i  =0; i < num_data; i++){
+        labels[i] = (int)(data_char[i][0]);
+    }
+
+
+    close(fd);
+    for (int i =0; i < num_data; i++){
+        free(data_char[i]);
+    }
+    free(data_char);
+
+    return labels;
+}
+
 bool ** shiftImage(bool ** image, int size,int shift_right, int shift_up){
     bool ** shifted_image = malloc(sizeof(bool *) * size);
     for(int i = 0; i < size; i++){

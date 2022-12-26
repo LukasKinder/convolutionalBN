@@ -1,8 +1,8 @@
 
 #define N_DATA_FOR_SELECTING_KERNEL 10 
-#define N_DATA_FOR_FINDING_WORST_KERNEL 500
-#define ITERATIONS_EM 100
-#define STRUCTURE_SEARCH_DATA_PER_CONFIGURATION 50
+#define N_DATA_FOR_FINDING_WORST_OR_NEW_KERNEL 1000
+#define ITERATIONS_EM 3
+#define STRUCTURE_SEARCH_DATA_PER_CONFIGURATION 10
 
 float covariance(bool **** data, int n_data, int kernel1_depth,int kernel2_depth, int size, float mean1, float mean2){
     float covariance = 0;
@@ -54,6 +54,8 @@ float correlation(bool **** data, int n_data, int kernel1_depth,int kernel2_dept
 //"data_after" must contain the data_before transformed without pooling
 void replace_kernel_with_promising_candidate(Kernel * kernels, int n_kernels, int index_kernel_to_replace
         ,bool **** data_before, int size_before, int n_data, bool verbose){
+
+    n_data = n_data < N_DATA_FOR_FINDING_WORST_OR_NEW_KERNEL ? n_data: N_DATA_FOR_FINDING_WORST_OR_NEW_KERNEL;
     
     int max_iterations = 100;
     Kernel k = kernels[index_kernel_to_replace];
@@ -102,13 +104,13 @@ void replace_kernel_with_promising_candidate(Kernel * kernels, int n_kernels, in
         for (int j = 0; j < n_kernels; j++){
             if (j == index_kernel_to_replace || means[j] == 0.0) continue;
             corr = fabs( correlation(data_after,n_data,index_kernel_to_replace,j,size_after,mean,means[j]));
-            if (0.3 < corr ){
+            if (0.4 < corr ){
                 //kernel is too similar to an existing kernel
                 if (verbose)  printf("REPLACE_WITH_PROMISING_KERNEL: Kernel is too similar to an existing one (%d ==> %f\n",j,corr);
                 break;
             }
         }
-        if ( 0.3 < corr) continue;
+        if ( 0.4 < corr) continue;
 
         if (verbose)  printf("REPLACE_WITH_PROMISING_KERNEL: Found a useful kernel! (mean = %f, corr = %f)\n", mean,corr);
 
@@ -175,10 +177,10 @@ void addRelationChildParent(BayesianNetwork bn, int d_child, int position_parent
             //up-felt relation
             distance_vertically = - bn->distanceRelation;
             distance_horizontally = - bn->distanceRelation;
-        } else if (position_parent / bn->depth == 0){
+        } else if (position_parent / bn->depth == 1){
             distance_vertically =  - bn->distanceRelation;
             distance_horizontally = 0;
-        } else if (position_parent / bn->depth == 0){
+        } else if (position_parent / bn->depth == 2){
             //up-rigth relation
             distance_vertically = -bn->distanceRelation;
             distance_horizontally = bn->distanceRelation;
@@ -193,11 +195,11 @@ void addRelationChildParent(BayesianNetwork bn, int d_child, int position_parent
     for (int x = 0; x < bn->size; x++){
         for (int y = 0; y < bn->size; y++){
 
-            if (x - distance_vertically < 0 || y - distance_horizontally < 0
-                || x - distance_vertically >= bn->size || y - distance_horizontally >= bn->size) continue; //can not add relations
+            if (x + distance_vertically < 0 || y + distance_horizontally < 0
+                || x + distance_vertically >= bn->size || y + distance_horizontally >= bn->size) continue; //can not add relations
 
             child = bn->nodes[d_child][x][y];
-            parent = bn->nodes[d_parent][x - distance_vertically][y - distance_horizontally];
+            parent = bn->nodes[d_parent][x + distance_vertically][y + distance_horizontally];
 
             if (child->parents == NULL){
                 printf("Error: parent array of node is NULL\n");
@@ -236,10 +238,10 @@ void removeLastRelationChildParent(BayesianNetwork bn, int d_child, int position
             //up-felt relation
             distance_vertically = - bn->distanceRelation;
             distance_horizontally = - bn->distanceRelation;
-        } else if (position_parent / bn->depth == 0){
+        } else if (position_parent / bn->depth == 1){
             distance_vertically =  - bn->distanceRelation;
             distance_horizontally = 0;
-        } else if (position_parent / bn->depth == 0){
+        } else if (position_parent / bn->depth == 2){
             //up-rigth relation
             distance_vertically = -bn->distanceRelation;
             distance_horizontally = bn->distanceRelation;
@@ -253,14 +255,14 @@ void removeLastRelationChildParent(BayesianNetwork bn, int d_child, int position
     for (int x = 0; x < bn->size; x++){
         for (int y = 0; y < bn->size; y++){
 
-            if (x - distance_vertically < 0 || y - distance_horizontally < 0
-                || x - distance_vertically >= bn->size || y - distance_horizontally >= bn->size) continue; 
+            if (x + distance_vertically < 0 || y + distance_horizontally < 0
+                || x + distance_vertically >= bn->size || y + distance_horizontally >= bn->size) continue; 
 
             child = bn->nodes[d_child][x][y];
             (child->n_parents)--;
 
             if (remove_child_relation){
-                parent = bn->nodes[d_parent][x - distance_vertically][y - distance_horizontally];
+                parent = bn->nodes[d_parent][x + distance_vertically][y + distance_horizontally];
                 (parent->n_children)--;
             }
         }
@@ -300,6 +302,7 @@ bool optimizeStructure(BayesianNetwork bn,  bool **** data, int n_data
     }
     
     for (int d = 0; d < depth; d++){
+        if (verbose) printf("Adding relations for depth %d\n",d);
 
         for (int n_relation = 0; n_relation < n_incoming_relations; n_relation++){
             int best_relation_direction = -1;
@@ -317,9 +320,15 @@ bool optimizeStructure(BayesianNetwork bn,  bool **** data, int n_data
                 }
             }
 
+            if (verbose) printf("Add incomming relations from depth %d from %d (%d) \n", best_relation_direction % depth, best_relation_direction / depth,best_relation_direction);
+
             //only child parent relations in order to parallelize this loop
             addRelationChildParent(bn,d,best_relation_direction,true);
-
+        }
+        if (verbose) {
+            printf("Done for depth %d\n",d);
+            printf("Example:\n");
+            printNode(bn->nodes[d][bn->size / 2][bn->size / 2],true);
         }
     
     }
@@ -362,6 +371,8 @@ void updateStructureHeuristicNewKernel(float *** structure_heuristic,int depth, 
     int best_index;
     bool best_was_updated;
 
+    int n_to_zero = 0;
+
     for (int d = 0; d < depth; d++){
 
         best_was_updated = false;
@@ -381,6 +392,7 @@ void updateStructureHeuristicNewKernel(float *** structure_heuristic,int depth, 
             for (int direction = 0; direction < n_directions_relations; direction++){
                 if (best_was_updated || direction % depth == kernel){
                     structure_heuristic[d][n_relation][direction] = 0.0;
+                    n_to_zero++;
                 }
             }
 
@@ -406,9 +418,9 @@ void freeStructureHeuristic(float *** structure_heuristic, int depth, int n_rela
 }
 
 //update all values with 0.0 as well as all if building on previous 0.0 value
-void updateStructureHeuristics(float *** structureHeuristic,int n_relations,  BayesianNetwork bn, bool **** data, int n_data,bool verbose){
-    int n_directions_relations = bn->diagonals ? 4  * bn->depth : 2 * bn->depth;
-
+int  updateStructureHeuristics(float *** structureHeuristic,int n_relations,  BayesianNetwork bn, bool **** data, int n_data,bool verbose){
+    int  n_directions_relations = bn->diagonals ? 4  * bn->depth : 2 * bn->depth;
+    int n_updates = 0;
 
 
     #pragma omp parallel for
@@ -459,7 +471,7 @@ void updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
                 if (current == 0.0 || best_is_new){
                     if (verbose) printf("Must update because missing or previous was new\n");
 
-                    data_used = (int)(pow(2,n_relation)) * 100;
+                    data_used = (int)(pow(2,n_relation)) * STRUCTURE_SEARCH_DATA_PER_CONFIGURATION ;
                     if (data_used > n_data){
                         //printf("WARNING: it is not enough data instances per configuration\n");
                         data_used = n_data;
@@ -471,6 +483,7 @@ void updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
                     removeLastRelationChildParent(bn_copy,d,direction,false);
 
                     is_new_flag = true;
+                    n_updates++;
                 }
                 if (current < best_heuristic){
                     best_heuristic = current;
@@ -478,7 +491,7 @@ void updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
                     best_is_new_current= is_new_flag;
                 }
             }
-            best_is_new = best_is_new_current;
+            best_is_new = best_is_new_current ;
             if (best_is_new && n_relation != n_relations -1){
                 if (verbose) printf("Must reset everything in next layer\n");
                 //reset all values
@@ -492,15 +505,20 @@ void updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
         freeBayesianNetwork(bn_copy);
         free(existing_relations);
     }
+    return n_updates;
 }
 
 //heuristic is log liklyhood after removeing relations (should be higher)
-float kernelHeuristic(bool **** data, int n_data, BayesianNetwork bn, int depth_kernel, float * logProbLevel){
+float kernelHeuristic(bool **** data, int n_data, BayesianNetwork bn, int depth_kernel, float * logProbLevel, bool verbose){
 
     BayesianNetwork bn_no_outgoing = createBayesianNetwork(bn->size,bn->depth,bn->distanceRelation, bn->diagonals);
     int d,x,y, n_child;
     Node original_node, original_child,new_node,new_child;
     bool * relevant_layer = malloc(sizeof(bool) * bn->depth);
+
+    if (verbose){
+        printf("removing outgoing relations of kernel %d has an effect on levels: ",depth_kernel);
+    }
     for(int i = 0; i < bn->depth; i++){
         relevant_layer[i] = false;
     }
@@ -514,6 +532,7 @@ float kernelHeuristic(bool **** data, int n_data, BayesianNetwork bn, int depth_
                     original_node = bn->nodes[d][x][y];
                     for (n_child = 0; n_child < original_node->n_children; n_child++){
                         original_child = original_node->children[n_child];
+                        if (! relevant_layer[original_child->depth] && verbose) printf("%d ", original_child->depth);
                         relevant_layer[original_child->depth] = true; //this layer is important!
                     }
                     continue;
@@ -536,6 +555,7 @@ float kernelHeuristic(bool **** data, int n_data, BayesianNetwork bn, int depth_
             }
         }
     }
+    if (verbose) printf("\n Initialization complete \n");
 
 
     //the actual heuristic, removing outgoin relations should reduce the likleyhood. Effect (probably) bigger if kernel is more important
@@ -543,11 +563,15 @@ float kernelHeuristic(bool **** data, int n_data, BayesianNetwork bn, int depth_
     for( int i = 0; i< bn->depth; i++){
         if (relevant_layer[i]){
             heuristic += logMaxLikelihoodDataGivenModelOneLevel(bn_no_outgoing,data,n_data,i);
+            if (verbose) printf("in layer  %d, heuristic += %f \n", i, logMaxLikelihoodDataGivenModelOneLevel(bn_no_outgoing,data,n_data,i));
+            
         } else{
             //reuse previous results
             heuristic += logProbLevel[i];
         }
     }
+
+    if (verbose) printf("overall heuristic %f\n",heuristic);
 
     free(relevant_layer);
 
@@ -559,16 +583,19 @@ float kernelHeuristic(bool **** data, int n_data, BayesianNetwork bn, int depth_
 int determine_worst_kernel(bool **** data, int n_data, BayesianNetwork bn, bool verbose){
     float * logProbsLevel = malloc(sizeof(float) * bn->depth);
 
-    int used_data = N_DATA_FOR_FINDING_WORST_KERNEL < n_data ? N_DATA_FOR_FINDING_WORST_KERNEL : n_data;
+    int used_data = N_DATA_FOR_FINDING_WORST_OR_NEW_KERNEL < n_data ? N_DATA_FOR_FINDING_WORST_OR_NEW_KERNEL : n_data;
 
     for(int i = 0; i < bn->depth; i++){
-        logProbsLevel[i] = logMaxLikelihoodDataGivenModelOneLevel(bn,data,n_data,i);
+        logProbsLevel[i] = logMaxLikelihoodDataGivenModelOneLevel(bn,data,used_data,i);
     }
     int worst_kernel = -1;
     float current, worst_heuristic = -999999999999;
     #pragma omp parallel for
     for (int i = 0; i < bn->depth; i++){
-        current = kernelHeuristic(data,used_data,bn,i,logProbsLevel);
+        if (verbose){
+            printf("finding heuristic for kernel %d\n",i);
+        }
+        current = kernelHeuristic(data,used_data,bn,i,logProbsLevel, verbose);
         #pragma omp critical
         {
         if (current > worst_heuristic){
@@ -616,6 +643,9 @@ void optimizeKernelsAndStructure(ConvolutionalBayesianNetwork cbn, int layer, bo
 
     int index_worst_kernel;
     float *** structure_heuristics = initStructureHeuristic(bn->depth,n_relations,bn->diagonals);
+    int n_updates;
+    bool ** tmp;
+    int size_after;
 
     //add child-parent-arrays to nodes with correct size
 
@@ -626,12 +656,11 @@ void optimizeKernelsAndStructure(ConvolutionalBayesianNetwork cbn, int layer, bo
         if (verbose) printf("Optimizing Structure\n");
 
         //printStructureHeuristic(structure_heuristics,bn->depth,n_relations,bn->diagonals);
-        //int X;
-        //scanf("%d",&X);
-        updateStructureHeuristics(structure_heuristics,n_relations,bn,data_next_layer,n_data,false);
-        //printStructureHeuristic(structure_heuristics,bn->depth,n_relations,bn->diagonals);
-        //scanf("%d",&X);
+        n_updates = updateStructureHeuristics(structure_heuristics,n_relations,bn,data_next_layer,n_data,false);
+        if (verbose) printf("...required %d updates\n",n_updates);
 
+
+        //printStructureHeuristic(structure_heuristics,bn->depth,n_relations,bn->diagonals);
         optimizeStructure(bn,data_next_layer,n_data,structure_heuristics,n_relations,false);
 
         if (verbose) printf("Finding worst kernel\n");
@@ -646,14 +675,16 @@ void optimizeKernelsAndStructure(ConvolutionalBayesianNetwork cbn, int layer, bo
         if (verbose) printf("Update Structure Heuristic\n");
 
         updateStructureHeuristicNewKernel(structure_heuristics,bn->depth,n_relations,bn->diagonals,index_worst_kernel,false);
-        
-        freeLayeredImages(data_next_layer,n_data,bn->depth,bn->size);
-        data_next_layer = dataTransition(layered_images, n_data,bn_before->depth,bn_before->size,cbn->transitionalKernels[layer-1]
-                ,cbn->n_kernels[layer-1],cbn->poolingKernels[layer-1] );
-        
-        
-        
 
+        if (verbose) printf("Update data\n");
+        
+        for (int j = 0; j < n_data; j++){
+            freeImage(data_next_layer[j][index_worst_kernel],bn->size);
+            tmp = applyConvolution(layered_images[j],bn_before->size,bn_before->size,cbn->transitionalKernels[layer-1][index_worst_kernel]);
+            size_after = sizeAfterConvolution(bn_before->size,cbn->transitionalKernels[layer-1][index_worst_kernel]);
+            data_next_layer[j][index_worst_kernel] = applyMaxPoolingOneLayer(tmp,size_after,size_after,cbn->poolingKernels[layer-1]);
+            freeImage(tmp,size_after);
+        }
     }
     freeStructureHeuristic(structure_heuristics,bn->depth,n_relations);
     freeLayeredImages(data_next_layer,n_data,bn->depth,bn->size);

@@ -6,11 +6,12 @@
 #include "convolution.h"
 #include "bayesianNetwork.h"
 #include "convolutionalBayesianNetwork.h"
+#include "trainNumberNodes.h"
 #include "inference.h"
 #include "em_algorithm.h"
 
 
-#define TRAINING_SIZE 5000
+#define TRAINING_SIZE 1000
 
 int main(void){
 
@@ -19,18 +20,22 @@ int main(void){
     
     printf("Loading data...\n");
     bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE,0.3);
+    printf("finished reading images\n Reading Labels ... \n");
+    int * labels = readLabels("./data/train-labels.idx1-ubyte", TRAINING_SIZE);
     printf("Done!\n");
 
     printf("MAIN: init cbn\n");
-    ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork();
 
-    addLayerToCbn(cbn,3,mustTMustFEither,2,2,3, true); 
-    addLayerToCbn(cbn,3,mustTMustFEither,2,2,5, true); 
-    addLayerToCbn(cbn,3,mustTMustFEither,2,2,7, true); 
-    //addLayerToCbn(cbn,8,mustTMustFEither,2,2,13,false); 
 
-    float thresholds[] = {0.3,0.35,0.4};
-    int n_relations = (int) ( log(TRAINING_SIZE / 100.0) / log(2.0));
+    ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(2);
+    cbn->bayesianNetworks[0] = createBayesianNetwork(28,1,1,true);
+    addLayerToCbn(cbn,1,7,mustTMustFEither,3,2,4, true); 
+    //addLayerToCbn(cbn,2,7,mustTMustFEither,3,2,7, true); 
+    //addLayerToCbn(cbn,3,7,mustTMustFEither,3,2,10, true); 
+    //addLayerToCbn(cbn,4,8,mustTMustFEither,2,2,13,false); 
+
+    float thresholds[] = {0.2,0.3,0.4};
+    int n_relations =  (int) ( log(TRAINING_SIZE / 100.0) / log(2.0));
     printf("n_relations = %d\n",n_relations);
     for (int i = 0; i < cbn->n_layers; i++){
         if (i == 0){
@@ -38,10 +43,21 @@ int main(void){
         }else {
             optimizeKernelsAndStructure(cbn,i, images, TRAINING_SIZE,n_relations,true);
         }
-        tuneCPTwithAugmentedData(cbn, i , "./data/train-images.idx3-ubyte", 60000 , 0, thresholds, 1,1.0);
+
+        learnStructureNumberNodes(10,3,i,cbn,images,labels,TRAINING_SIZE,true);
+
+        tuneCPTwithAugmentedData(cbn, i , "./data/train-images.idx3-ubyte", "./data/train-labels.idx1-ubyte" ,600 , 1, thresholds, 1,1.0);
     }
 
-    printNode(cbn->bayesianNetworks[0]->nodes[0][12][15],true);
+    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[0],true);
+    printNumberNode(cbn->bayesianNetworks[1]->numberNodes[0],true);
+    printNumberNode(cbn->bayesianNetworks[1]->numberNodes[1],true);
+    printNumberNode(cbn->bayesianNetworks[1]->numberNodes[2],true);
+
+    free(labels);
+    freeImages(images,TRAINING_SIZE,28);
+    freeConvolutionalBayesianNetwork(cbn);
+    return 0;
 
     setStateToImage(cbn,images[TRAINING_SIZE -1]);
     int X,Y;
