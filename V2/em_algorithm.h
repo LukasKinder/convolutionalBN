@@ -1,8 +1,8 @@
 
-#define N_DATA_FOR_SELECTING_KERNEL 10 
+#define N_DATA_FOR_SELECTING_KERNEL 30 
 #define N_DATA_FOR_FINDING_WORST_OR_NEW_KERNEL 1000
-#define ITERATIONS_EM 3
-#define STRUCTURE_SEARCH_DATA_PER_CONFIGURATION 10
+#define ITERATIONS_EM 500
+#define STRUCTURE_SEARCH_DATA_PER_CONFIGURATION 40
 
 float covariance(bool **** data, int n_data, int kernel1_depth,int kernel2_depth, int size, float mean1, float mean2){
     float covariance = 0;
@@ -647,6 +647,8 @@ void optimizeKernelsAndStructure(ConvolutionalBayesianNetwork cbn, int layer, bo
     bool ** tmp;
     int size_after;
 
+    int n_data_used = (int)(pow(2,n_relations)) * STRUCTURE_SEARCH_DATA_PER_CONFIGURATION ;
+
     //add child-parent-arrays to nodes with correct size
 
     for (int i = 0; i < ITERATIONS_EM ; i++){
@@ -678,7 +680,7 @@ void optimizeKernelsAndStructure(ConvolutionalBayesianNetwork cbn, int layer, bo
 
         if (verbose) printf("Update data\n");
         
-        for (int j = 0; j < n_data; j++){
+        for (int j = 0; j < n_data_used; j++){
             freeImage(data_next_layer[j][index_worst_kernel],bn->size);
             tmp = applyConvolution(layered_images[j],bn_before->size,bn_before->size,cbn->transitionalKernels[layer-1][index_worst_kernel]);
             size_after = sizeAfterConvolution(bn_before->size,cbn->transitionalKernels[layer-1][index_worst_kernel]);

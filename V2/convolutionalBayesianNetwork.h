@@ -110,7 +110,7 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
     
 
 
-    int * labels = readLabels("./data/train-labels.idx1-ubyte", n_data);
+    int * labels = readLabels(pathLabels, n_data);
     for(int i = 0; i < n_thresholds; i++){
         bool *** images = readImages(pathImages,n_data,thresholds[i]);
         for(int shift_right = -shifts; shift_right < shifts +1;shift_right++ ){

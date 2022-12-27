@@ -95,7 +95,7 @@ void learnStructureNumberNodes(int n_nodes, int n_relations, int layer, Convolut
     if (verbose) printf("LEARN_NN: finished data transformation\n \n");
 
 
-    #pragma omp parallel for private(nn)
+    //#pragma omp parallel for private(nn)
     for (int i = 0; i < n_nodes; i++){
 
         if (verbose) printf("\tLEARN_NN: learn NN %d of %d \n",i,n_nodes);

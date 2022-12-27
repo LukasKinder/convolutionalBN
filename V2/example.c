@@ -9,9 +9,10 @@
 #include "trainNumberNodes.h"
 #include "inference.h"
 #include "em_algorithm.h"
+#include "performance_measure.h"
 
 
-#define TRAINING_SIZE 10000
+#define TRAINING_SIZE 60000
 
 int main(void){
 
@@ -27,33 +28,42 @@ int main(void){
     printf("MAIN: init cbn\n");
 
 
-    ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(1);
+    ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(3);
     cbn->bayesianNetworks[0] = createBayesianNetwork(28,1,1,true);
-    //addLayerToCbn(cbn,1,7,mustTMustFEither,3,2,4, true); 
-    //addLayerToCbn(cbn,2,7,mustTMustFEither,3,2,7, true); 
+    addLayerToCbn(cbn,1,5,mustTMustFEither,3,2,4, true); 
+    addLayerToCbn(cbn,2,10,mustTMustFEither,2,2,6, true); 
     //addLayerToCbn(cbn,3,7,mustTMustFEither,3,2,10, true); 
     //addLayerToCbn(cbn,4,8,mustTMustFEither,2,2,13,false); 
 
-    float thresholds[] = {0.3,0.35,0.4};
+    float thresholds[] = {0.3,0.25,0.35};
     int n_relations =  (int) ( log(TRAINING_SIZE / 100.0) / log(2.0));
     printf("n_relations = %d\n",n_relations);
     for (int i = 0; i < cbn->n_layers; i++){
         if (i == 0){
             addAllDependencies(cbn->bayesianNetworks[0],1,true);
         }else {
-            optimizeKernelsAndStructure(cbn,i, images, TRAINING_SIZE,n_relations,true);
+            optimizeKernelsAndStructure(cbn,i, images, TRAINING_SIZE,4,true);
         }
 
-        learnStructureNumberNodes(10000,4,i,cbn,images,labels,TRAINING_SIZE,false);
+        printf("Learn number nodes\n");
+
+        learnStructureNumberNodes(1000,5,i,cbn,images,labels,TRAINING_SIZE,false);
 
         tuneCPTwithAugmentedData(cbn, i , "./data/train-images.idx3-ubyte", "./data/train-labels.idx1-ubyte" ,60000 , 0, thresholds, 1,1.0);
     }
 
+    printf("calculating accuracy\n");
+
+    printf("Accuracy = %f\n", predictNumberAccuracy(cbn, "./data/t10k-images.idx3-ubyte","./data/t10k-labels.idx1-ubyte", 10000 , true));
+
+    predictNumberManualExperiment(cbn, images, TRAINING_SIZE, labels);
+
+
     printNumberNode(cbn->bayesianNetworks[0]->numberNodes[0],true);
-    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[1],true);
-    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[2],true);
-    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[3],true);
-    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[4],true);
+    printNumberNode(cbn->bayesianNetworks[1]->numberNodes[1],true);
+    printNumberNode(cbn->bayesianNetworks[1]->numberNodes[2],true);
+    printNumberNode(cbn->bayesianNetworks[2]->numberNodes[3],true);
+    printNumberNode(cbn->bayesianNetworks[2]->numberNodes[4],true);
 
 
     setStateToImage(cbn,images[TRAINING_SIZE -1]);
