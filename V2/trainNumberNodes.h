@@ -2,6 +2,16 @@
 #define NUMBER_NODE_DATA_PER_CONFIGURATION 100
 #define NUMBER_NODE_PARENT_SUBSET_SIZE 0.01
 
+void setValuesNumberNode(ConvolutionalBayesianNetwork cbn, int value){
+    BayesianNetwork bn;
+    for (int i = 0; i < cbn->n_layers; i++){
+        bn = cbn->bayesianNetworks[i];
+        for (int j = 0; j < bn->n_numberNodes; j++){
+            bn->numberNodes[j]->value = value;
+        }
+    }
+}
+
 
 void sampleData(bool **** data, int * data_labels ,int n_data, bool **** sample, int * sample_labels, int n_samples){
     int rand_index;
@@ -117,7 +127,7 @@ void learnStructureNumberNodes(int n_nodes, int n_relations, int layer, Convolut
 
                         n = bn->nodes[d][x][y]; 
                         nn->parents[nn->n_parents] = n;
-                        nn->n_parents++;
+                        (nn->n_parents)++;
 
                         //add counts
                         if (verbose) printf("\t\t\tLEARN_NN: add coutns\n");
@@ -125,7 +135,7 @@ void learnStructureNumberNodes(int n_nodes, int n_relations, int layer, Convolut
                         //measure goodness
                         if (verbose) printf("\t\t\tLEARN_NN: calculate heuristic\n");
                         current = logMaxLikelihoodDataNumberNode(nn);
-                        nn->n_parents--;
+                        (nn->n_parents)--;
 
                         if (current > best_heuristic){
                             best_heuristic = current;
@@ -140,7 +150,11 @@ void learnStructureNumberNodes(int n_nodes, int n_relations, int layer, Convolut
             }
             if (verbose) printf("\t\tLEARN_NN: add relation\n");
             nn->parents[nn->n_parents] = best_parent;
-            nn->n_parents++;
+            (nn->n_parents)++;
+
+            best_parent->numberNodeChildren = realloc(best_parent->numberNodeChildren, sizeof(NumberNode) *  (best_parent->n_numberNodeChildren + 1));
+            best_parent->numberNodeChildren[best_parent->n_numberNodeChildren] = nn;
+            best_parent->n_numberNodeChildren++;
         }
         if (verbose) printf("\tLEARN_NN: learn NN %d complete\n",i);
         free(bootstrapData);

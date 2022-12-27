@@ -73,10 +73,11 @@ NumberNode initNumberNode(){
     NumberNode nn = malloc(sizeof(RawNumberNode));
     nn->parents = NULL;
     nn->n_parents = 0;
-    nn->value = -1;
+    nn->value = 1; //HARDCODED!!!
     nn->changeID = 0;
     nn->CPT = NULL;
     nn->stateCounts = NULL;
+    nn->changeID = 0;
     return nn; 
 }
 
@@ -190,6 +191,22 @@ double probabilityGivenParentsNN(NumberNode nn){
     return result;
 }
 
+int countsOfStateNumberNode(NumberNode nn){
+    bool * parent_states = malloc(sizeof(bool) * nn->n_parents);
+    for (int i = 0; i < nn->n_parents; i++){
+        parent_states[i] = nn->parents[i]->value;
+    }
+    int res, row = binaryToInt(parent_states,nn->n_parents);
+    res = 0;
+    for (int i = 0; i < 10; i++){
+        res += nn->stateCounts[row][i];
+    }
+
+
+    free(parent_states);
+    return res;
+}
+
 void printBayesianNetwork(BayesianNetwork bn){
     printf("Bayesian network with depth: %d; size = %d; distanceRelations: %d and %d Number Nodes\n",bn->depth,bn->size,bn->distanceRelation, bn->n_numberNodes);
 }
@@ -233,6 +250,7 @@ void printNode(Node n, bool printTables){
 
 void printNumberNode(NumberNode nn, bool printTables){
     Node n2;
+    printf("number node with value %d\n",nn->value);
     printf("%d parents at positions (d/x/y):\n", nn->n_parents);
     for (int i = 0; i < nn->n_parents;i++){
         n2 = nn->parents[i];
@@ -273,24 +291,6 @@ void setStateToData(BayesianNetwork bn, bool *** data){
         }
     }
 
-    int best_value;
-    float current, best;
-    NumberNode nn;
-    //give number nodes their most likely state
-    for (int i = 0; i < bn->n_numberNodes; i++){
-        best = -1;
-        nn = bn->numberNodes[i];
-        for(int j=0; j < 10; j++){
-            nn->value = j;
-            current = probabilityGivenParentsNN(nn);
-            if (current > best){
-                best = current;
-                best_value = j;
-            }
-        }
-        nn->value = best_value;
-
-    }
 }
 
 

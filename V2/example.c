@@ -11,7 +11,7 @@
 #include "em_algorithm.h"
 
 
-#define TRAINING_SIZE 1000
+#define TRAINING_SIZE 10000
 
 int main(void){
 
@@ -27,14 +27,14 @@ int main(void){
     printf("MAIN: init cbn\n");
 
 
-    ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(2);
+    ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(1);
     cbn->bayesianNetworks[0] = createBayesianNetwork(28,1,1,true);
-    addLayerToCbn(cbn,1,7,mustTMustFEither,3,2,4, true); 
+    //addLayerToCbn(cbn,1,7,mustTMustFEither,3,2,4, true); 
     //addLayerToCbn(cbn,2,7,mustTMustFEither,3,2,7, true); 
     //addLayerToCbn(cbn,3,7,mustTMustFEither,3,2,10, true); 
     //addLayerToCbn(cbn,4,8,mustTMustFEither,2,2,13,false); 
 
-    float thresholds[] = {0.2,0.3,0.4};
+    float thresholds[] = {0.3,0.35,0.4};
     int n_relations =  (int) ( log(TRAINING_SIZE / 100.0) / log(2.0));
     printf("n_relations = %d\n",n_relations);
     for (int i = 0; i < cbn->n_layers; i++){
@@ -44,20 +44,17 @@ int main(void){
             optimizeKernelsAndStructure(cbn,i, images, TRAINING_SIZE,n_relations,true);
         }
 
-        learnStructureNumberNodes(10,3,i,cbn,images,labels,TRAINING_SIZE,true);
+        learnStructureNumberNodes(10000,4,i,cbn,images,labels,TRAINING_SIZE,false);
 
-        tuneCPTwithAugmentedData(cbn, i , "./data/train-images.idx3-ubyte", "./data/train-labels.idx1-ubyte" ,600 , 1, thresholds, 1,1.0);
+        tuneCPTwithAugmentedData(cbn, i , "./data/train-images.idx3-ubyte", "./data/train-labels.idx1-ubyte" ,60000 , 0, thresholds, 1,1.0);
     }
 
     printNumberNode(cbn->bayesianNetworks[0]->numberNodes[0],true);
-    printNumberNode(cbn->bayesianNetworks[1]->numberNodes[0],true);
-    printNumberNode(cbn->bayesianNetworks[1]->numberNodes[1],true);
-    printNumberNode(cbn->bayesianNetworks[1]->numberNodes[2],true);
+    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[1],true);
+    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[2],true);
+    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[3],true);
+    printNumberNode(cbn->bayesianNetworks[0]->numberNodes[4],true);
 
-    free(labels);
-    freeImages(images,TRAINING_SIZE,28);
-    freeConvolutionalBayesianNetwork(cbn);
-    return 0;
 
     setStateToImage(cbn,images[TRAINING_SIZE -1]);
     int X,Y;
@@ -78,12 +75,17 @@ int main(void){
     printf("MAIN: starting sampling\n");
 
     int iterations;
+    int set_value_nn;
     while (1){
         printf("iterations for gibbs sampling:\n");
         scanf("%d",&iterations);
         if (iterations == 0){
             break;
         }
+
+        printf("freeze value for number nodes:\n");
+        scanf("%d",&set_value_nn);
+        setValuesNumberNode(cbn,set_value_nn);
         
         //setStateToImage(cbn,images[rand() % TRAINING_SIZE ]);
         setToRandomState(cbn,0.7);
@@ -104,6 +106,10 @@ int main(void){
         if (iterations == 0){
             break;
         }
+
+        printf("freeze value for number nodes:\n");
+        scanf("%d",&set_value_nn);
+        setValuesNumberNode(cbn,set_value_nn);
         
         setStateToImage(cbn,images[rand() % TRAINING_SIZE]);
         //setToRandomState(cbn,0.7);
@@ -124,6 +130,10 @@ int main(void){
         if (iterations == 0){
             break;
         }
+
+        printf("freeze value for number nodes:\n");
+        scanf("%d",&set_value_nn);
+        setValuesNumberNode(cbn,set_value_nn);
         
         setStateToImage(cbn,images[rand() % TRAINING_SIZE]);
         //setToRandomState(cbn,0.7);
@@ -139,7 +149,7 @@ int main(void){
         freeImages(samples,n_samples,28);
     } 
 
-
+    free(labels);
     freeImages(images,TRAINING_SIZE,28);
     freeConvolutionalBayesianNetwork(cbn);
 }  

@@ -1,7 +1,7 @@
 
 
-#define STOP_IF_CERTAIN_LAYER 0.05
-#define SOOTHE_PREDICTION_NEXT_LAYER 0.3
+#define STOP_IF_CERTAIN_LAYER 0.0 // 0 = no stopping
+#define SOOTHE_PREDICTION_NEXT_LAYER 0.6 // 1 = no smoothing
 
 //assumes not stride or padding for now, assumes MUSTIN OUT EITHER KERNEL
 //assumes no stride!! (TODO)
@@ -174,7 +174,11 @@ float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n, bool verbos
 
     bool currentValue = n->value;
 
-    int c;
+    int c, counts_nn;
+    float * weighted_average_nn_prob_true =  malloc(sizeof(float) * cbn->n_layers);
+    float * weighted_average_nn_prob_false =  malloc(sizeof(float) * cbn->n_layers);
+    int * counts_for_nn = malloc(sizeof(int) * cbn->n_layers);
+    int * nn_in_layers_effected = malloc(sizeof(int) * cbn->n_layers);
 
     int * n_effected_nodes_layers = malloc(sizeof(int) * cbn->n_layers);
     Node ** effected_nodes_layers = malloc(sizeof(Node *) * cbn->n_layers);
@@ -183,12 +187,16 @@ float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n, bool verbos
     int * size_relevant_nodes_layers = malloc(sizeof(int) * cbn->n_layers);
     Node ** relevant_nodes_at_layers = malloc(sizeof(Node *) * cbn->n_layers);
     for(int i = 0; i < cbn->n_layers; i++){
+        weighted_average_nn_prob_true[i] = 0;
+        weighted_average_nn_prob_false[i]  =0;
+        nn_in_layers_effected[i] = 0;
         size_relevant_nodes_layers[i] = 0;
         effected_nodes_layers[i] = effectedNodesOfPixel(cbn,n->x,n->y,i,&n_effected_nodes_layers[i]);
     }
 
 
-    Node n2;
+    Node n2, rn;
+    NumberNode nn;
     int changeId = rand();
     for (int b = 0; b < 2; b++){
         n->value = !n->value;
@@ -196,6 +204,7 @@ float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n, bool verbos
         propagatePixelChangeUp(cbn,n,0,changeId);
 
         for (int i = 0; i < cbn->n_layers; i++){
+            counts_for_nn[i] = 0;
             if (b == 0){
                 for (int j = 0; j < n_effected_nodes_layers[i]; j++){
                     n2 = effected_nodes_layers[i][j];
@@ -222,24 +231,60 @@ float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n, bool verbos
 
             for( int j = 0; j < size_relevant_nodes_layers[i]; j++){
 
+                rn = relevant_nodes_at_layers[i][j];
+
                 if (n->value){
-                    prob_true_layers[i][j] = probabilityGivenParents(relevant_nodes_at_layers[i][j])
-                        * probabilityOfChildren(relevant_nodes_at_layers[i][j]);
+                    prob_true_layers[i][j] = probabilityGivenParents(rn) * probabilityOfChildren(rn);
                 }else {
-                    prob_false_layers[i][j] = probabilityGivenParents(relevant_nodes_at_layers[i][j])
-                        * probabilityOfChildren(relevant_nodes_at_layers[i][j]);
+                    prob_false_layers[i][j] = probabilityGivenParents(rn) * probabilityOfChildren(rn);
+                }
+
+                for (int k = 0; k < rn->n_numberNodeChildren; k++){
+                    nn = rn->numberNodeChildren[k];
+                    if ((b == 0 && nn->changeID != changeId) || (b == 1 && nn->changeID == changeId) ){
+                        counts_nn = countsOfStateNumberNode(nn);
+                        if (n->value){
+                            weighted_average_nn_prob_true[i] += counts_nn * probabilityGivenParentsNN(nn);
+                        } else {
+                            weighted_average_nn_prob_false[i] += counts_nn * probabilityGivenParentsNN(nn);
+                        }
+                        counts_for_nn[i] += counts_nn;
+
+                        nn->changeID = changeId;
+
+                        if (b == 0){
+                            nn_in_layers_effected[i] ++;
+                        }
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < cbn->n_layers; i++){
+            if (n->value){
+                if (counts_for_nn[i] == 0){
+                    weighted_average_nn_prob_true[i] = 0.5;
+                }else {
+                    if (verbose) printf("True: %f / %d\n",weighted_average_nn_prob_true[i],counts_for_nn[i]);
+                    weighted_average_nn_prob_true[i] /= counts_for_nn[i];
+                }
+            } else {
+                if (counts_for_nn[i] == 0){
+                    weighted_average_nn_prob_false[i] = 0.5;
+                }else {
+                    if (verbose) printf("False: %f / %d\n",weighted_average_nn_prob_false[i],counts_for_nn[i]);
+                    weighted_average_nn_prob_false[i] /= counts_for_nn[i];
                 }
             }
         }
     }
 
-    float weighted_average,smoothed_average, overall_result = 0.5, p1,p2;
+    float average_nn, weighted_average,smoothed_average, overall_result = 0.5, p1,p2;
     for (int i = 0; i < cbn->n_layers; i++){
 
         if (verbose) {
             printf("In layer %d: \n",i);
-            printf("%d nodes could change value, %d did\n"
-                ,n_effected_nodes_layers[i],size_relevant_nodes_layers[i]); 
+            printf("%d nodes could change value, %d did and %d number nodes are effected\n"
+                ,n_effected_nodes_layers[i],size_relevant_nodes_layers[i], nn_in_layers_effected[i]); 
         }
 
         if (size_relevant_nodes_layers[i] == 0){
@@ -255,6 +300,12 @@ float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n, bool verbos
         }
 
         weighted_average /= size_relevant_nodes_layers[i];
+        if (verbose)  printf("Average prob this layer based on pixel stucture: %f \n", weighted_average);
+
+        average_nn = weighted_average_nn_prob_true[i] / (weighted_average_nn_prob_true[i] + weighted_average_nn_prob_false[i]);
+        if (verbose && nn_in_layers_effected[i] != 0)  printf("Average prob this layer based on number nodes: %f (true: %f, false: %f)\n", average_nn,weighted_average_nn_prob_true[i], weighted_average_nn_prob_false[i]);
+
+        weighted_average = (weighted_average * average_nn) / (weighted_average * average_nn + (1 - weighted_average) * (1- average_nn));
         if (verbose)  printf("Average prob this layer: %f \n", weighted_average);
         
         if (i != 0){
@@ -294,6 +345,10 @@ float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n, bool verbos
     free(prob_false_layers);
     free(size_relevant_nodes_layers);
     free(relevant_nodes_at_layers);
+    free(weighted_average_nn_prob_true);
+    free(weighted_average_nn_prob_false);
+    free(counts_for_nn);
+    free(nn_in_layers_effected);
 
     return overall_result;
 }

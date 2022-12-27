@@ -134,6 +134,7 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
                 }
 
                 addDataCounts(cbn->bayesianNetworks[layer],layered_images,n_data);
+                #pragma omp parallel for
                 for (int i_nn = 0; i_nn <  cbn->bayesianNetworks[layer]->n_numberNodes; i_nn++){
                     addDataCountsNumberNode(cbn->bayesianNetworks[layer]->numberNodes[i_nn],layered_images,labels,n_data);
                 }
