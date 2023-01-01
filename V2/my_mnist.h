@@ -227,6 +227,7 @@ void freeLayeredImages(bool**** layeredData, int data_size, int depth, int size)
     free(layeredData);
 }
 
+
 void saveImage(bool ** image, int size, char name[]){
     char file_name[MAX_FILENAME];
     FILE *fp;
@@ -250,5 +251,19 @@ void saveImage(bool ** image, int size, char name[]){
         for (x=0; x<size; x++)
             fputc(image[y][x] ? 0: 255, fp);
     fclose(fp);
-    printf("Image was saved successfully\n");
+    //printf("Image was saved successfully\n");
+}
+
+void scaleAndSaveImage(bool ** image, int size, char name[], int scale){
+    int new_size = size * scale;
+    bool ** scaled_image = malloc(sizeof(bool) * size * new_size);
+    for (int i = 0; i < new_size; i++){
+        scaled_image[i] = malloc(sizeof(bool) * new_size);
+        for (int j = 0; j < new_size; j++){
+            scaled_image[i][j] = image[i / scale][j / scale];
+        }
+    }
+    saveImage(scaled_image,new_size,name);
+
+    freeImage(scaled_image,new_size);
 }

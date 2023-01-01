@@ -11,8 +11,10 @@
 #include "em_algorithm.h"
 #include "performance_measure.h"
 
+#include "samplingVideo.h"
 
-#define TRAINING_SIZE 60000
+
+#define TRAINING_SIZE 6000
 
 int main(void){
 
@@ -20,7 +22,7 @@ int main(void){
 
     
     printf("Loading data...\n");
-    bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE,0.3);
+    bool *** images = readImages("./data/train-images.idx3-ubyte",TRAINING_SIZE,0.5);
     printf("finished reading images\n Reading Labels ... \n");
     int * labels = readLabels("./data/train-labels.idx1-ubyte", TRAINING_SIZE);
     printf("Done!\n");
@@ -35,7 +37,7 @@ int main(void){
     //addLayerToCbn(cbn,3,7,mustTMustFEither,3,2,10, true); 
     //addLayerToCbn(cbn,4,8,mustTMustFEither,2,2,13,false); 
 
-    float thresholds[] = {0.3,0.25,0.35};
+    float thresholds[] = {0.5,0.4,0.6};
     int n_relations =  (int) ( log(TRAINING_SIZE / 100.0) / log(2.0));
     printf("n_relations = %d\n",n_relations);
     for (int i = 0; i < cbn->n_layers; i++){
@@ -52,9 +54,19 @@ int main(void){
         tuneCPTwithAugmentedData(cbn, i , "./data/train-images.idx3-ubyte", "./data/train-labels.idx1-ubyte" ,60000 , 0, thresholds, 1,1.0);
     }
 
+    int s[4] = {2,0,2,3};
+
+    generateImages(cbn,s,4,40000,100,2);
+
+    free(labels);
+    freeImages(images,TRAINING_SIZE,28);
+    freeConvolutionalBayesianNetwork(cbn);
+    return 0;
+
     printf("calculating accuracy\n");
 
     printf("Accuracy = %f\n", predictNumberAccuracy(cbn, "./data/t10k-images.idx3-ubyte","./data/t10k-labels.idx1-ubyte", 10000 , true));
+
 
     predictNumberManualExperiment(cbn, images, TRAINING_SIZE, labels);
 
@@ -100,7 +112,7 @@ int main(void){
         //setStateToImage(cbn,images[rand() % TRAINING_SIZE ]);
         setToRandomState(cbn,0.7);
         int n_samples = 99;
-        bool *** samples = gibbsSampling(cbn,n_samples,iterations);
+        bool *** samples = gibbsSampling(cbn,n_samples,iterations, 1.0);
         char name[10] = "sampleXX";
         for (int i = 0; i < n_samples; i++){
             name[6] = (char)('0' +  i / 10 );

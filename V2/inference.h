@@ -355,19 +355,19 @@ float probabilityPixelTrue(ConvolutionalBayesianNetwork cbn, Node n, bool verbos
 
 
 
-bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iterations){
+bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iterations, float smoothing_factor){
 
     bool *** samples = malloc(sizeof(bool**) * n_samples);
     int image_size = cbn->bayesianNetworks[0]->size;
     int x,y;
     Node n;
-    float probTrue;
+    float probTrue,p1,p2;
     bool value_before;
 
     samples[0] = getImageFromState(cbn);
 
     for (int i = 1; i < n_samples; i++){
-        printf("%d%\n",i);
+        printf("%d%\r",i);
         for (int j = 0; j < iterations / n_samples; j++){
 
             x = rand() % image_size;
@@ -377,6 +377,10 @@ bool *** gibbsSampling(ConvolutionalBayesianNetwork cbn, int n_samples, int iter
             value_before = n->value;
 
             probTrue = probabilityPixelTrue(cbn,n,false);
+            p1 = pow(probTrue,smoothing_factor);
+            p2 = pow(1 - probTrue, smoothing_factor);
+
+            probTrue = p1 / (p1 + p2);
 
             n->value = (float)rand() / (float)RAND_MAX < probTrue;
             
@@ -407,7 +411,7 @@ bool *** simulatedAnnealing(ConvolutionalBayesianNetwork cbn, int n_samples, int
     samples[0] = getImageFromState(cbn);
 
     for (int i = 1; i < n_samples; i++){
-        printf("%d%\n",i);
+        printf("%d%\r",i);
         for (int j = 0; j < (int)(n_iterations / n_samples); j++){
             iteration++;
 
@@ -443,7 +447,7 @@ bool *** strictClimbing(ConvolutionalBayesianNetwork cbn, int n_samples, int n_i
     samples[0] = getImageFromState(cbn);
 
     for (int i = 1; i < n_samples; i++){
-        printf("%d%\n",i);
+        printf("%d%\r",i);
         for (int j = 0; j < (int)(n_iterations / n_samples); j++){
 
             x = rand() % image_size;
