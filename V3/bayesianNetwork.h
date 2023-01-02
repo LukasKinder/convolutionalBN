@@ -81,7 +81,7 @@ NumberNode initNumberNode(){
     return nn; 
 }
 
-BayesianNetwork createBayesianNetwork(int size, int depth, int distance_relation, bool diagonals){
+BayesianNetwork createBayesianNetwork(int size, int depth, int n_number_nodes, int distance_relation, bool diagonals){
     BayesianNetwork bn = malloc(sizeof(RawBayesianNetwork));
     bn->size = size;
     bn->diagonals = diagonals;
@@ -98,9 +98,14 @@ BayesianNetwork createBayesianNetwork(int size, int depth, int distance_relation
             }
         }
     }
-    bn->n_numberNodes = 0;
-    bn->numberNodes = NULL;
 
+
+    //init number nodes
+    bn->numberNodes = malloc(sizeof(NumberNode) * n_number_nodes);
+    bn->n_numberNodes = n_number_nodes;
+    for (int i = 0; i < n_number_nodes; i++){
+        bn->numberNodes[i] = initNumberNode();
+    }
     return bn;
 }
 
@@ -287,7 +292,7 @@ void setStateToData(BayesianNetwork bn, float *** data){
     for (int d = 0; d < bn->depth; d++){
         for (int x = 0; x < bn->size;x++){
             for (int y = 0; y < bn->size;y++){
-                bn->nodes[d][x][y]->value = 0 < data[d][x][y] ;
+                bn->nodes[d][x][y]->value = 0.5 < data[d][x][y] ;
             }
         }
     }
@@ -388,10 +393,10 @@ void fitDataCountsOneLevel(BayesianNetwork bn, float **** data, int data_instanc
             for (int i = 0; i < data_instances; i++){
                 for (int j = 0; j < n->n_parents; j++ ){
                     parentNode = n->parents[j];
-                    parentCombination[j] = 0 <data[i][parentNode->depth][parentNode->x][parentNode->y];
+                    parentCombination[j] = 0.5 <data[i][parentNode->depth][parentNode->x][parentNode->y];
                 }
 
-                if (0 < data[i][level][x][y]){
+                if (0.5 < data[i][level][x][y]){
                     n->stateCountsTrue[ binaryToInt(parentCombination,n->n_parents)]++;
                 }else{
                     n->stateCountsFalse[ binaryToInt(parentCombination,n->n_parents)]++;
@@ -420,7 +425,7 @@ void fitDataCountsNumberNode(NumberNode nn, float **** data, int * nn_values, in
             parent_d = nn->parents[j]->depth;
             parent_x = nn->parents[j]->x;
             parent_y = nn->parents[j]->y;
-            parent_combination[j] = 0 < data[i][parent_d][parent_x][parent_y];
+            parent_combination[j] = 0.5 < data[i][parent_d][parent_x][parent_y];
         }
         row = binaryToInt(parent_combination,nn->n_parents);
         nn->stateCounts[row][nn_values[i]]++;
@@ -441,7 +446,7 @@ void addDataCountsNumberNode(NumberNode nn, float **** data, int * nn_values, in
             parent_d = nn->parents[j]->depth;
             parent_x = nn->parents[j]->x;
             parent_y = nn->parents[j]->y;
-            parent_combination[j] = 0 < data[i][parent_d][parent_x][parent_y];
+            parent_combination[j] = 0.5 < data[i][parent_d][parent_x][parent_y];
         }
         row = binaryToInt(parent_combination,nn->n_parents);
         nn->stateCounts[row][nn_values[i]]++;
@@ -491,9 +496,9 @@ void addDataCounts(BayesianNetwork bn, float **** data, int data_instances){
                 for (int i = 0; i < data_instances; i++){
                     for (int j = 0; j < n->n_parents; j++ ){
                         parentNode = n->parents[j];
-                        parentCombination[j] = 0 < data[i][parentNode->depth][parentNode->x][parentNode->y];
+                        parentCombination[j] = 0.5 < data[i][parentNode->depth][parentNode->x][parentNode->y];
                     }
-                    if (0 < data[i][d][x][y]){
+                    if (0.5 < data[i][d][x][y]){
                         n->stateCountsTrue[ binaryToInt(parentCombination,n->n_parents)]++;
                     }else{
                         n->stateCountsFalse[ binaryToInt(parentCombination,n->n_parents)]++;
@@ -546,9 +551,9 @@ void fitDataCounts(BayesianNetwork bn, float **** data, int n_data){
                 for (int i = 0; i < n_data; i++){
                     for (int j = 0; j < n->n_parents; j++ ){
                         parentNode = n->parents[j];
-                        parentCombination[j] = 0 < data[i][parentNode->depth][parentNode->x][parentNode->y];
+                        parentCombination[j] = 0.5 < data[i][parentNode->depth][parentNode->x][parentNode->y];
                     }
-                    if (0 < data[i][d][x][y]){
+                    if (0.5 < data[i][d][x][y]){
                         n->stateCountsTrue[ binaryToInt(parentCombination,n->n_parents)]++;
                     }else{
                         n->stateCountsFalse[ binaryToInt(parentCombination,n->n_parents)]++;
@@ -628,10 +633,10 @@ float logMaxLikelihoodDataGivenModelOneLevel(BayesianNetwork bn, float **** data
         for ( k = 0; k < bn->size; k++){
             n = bn->nodes[level][j][k];
             for (l = 0; l < (int)(pow(2,n->n_parents));l++ ){
-                if (n->stateCountsTrue[l]> 0){
+                if (n->stateCountsTrue[l]> 0.5){
                     logProb +=  (float)(n->stateCountsTrue[l]) * log((float)(n->stateCountsTrue[l]) / (n->stateCountsTrue[l] + n->stateCountsFalse[l]));
                 }
-                if (n->stateCountsFalse[l]> 0){
+                if (n->stateCountsFalse[l]> 0.5){
                     logProb +=  (float)(n->stateCountsFalse[l]) * log((float)(n->stateCountsFalse[l]) / (n->stateCountsTrue[l] + n->stateCountsFalse[l]));
                 }
             }
@@ -658,10 +663,10 @@ float logMaxLikelihoodDataGivenModel(BayesianNetwork bn, float**** data, int n_i
                 n = bn->nodes[i][j][k];
                 for (l = 0; l < (int)(pow(2,n->n_parents));l++ ){
 
-                    if (n->stateCountsTrue[l]> 0){
+                    if (n->stateCountsTrue[l]> 0.5){
                         logProb +=  n->stateCountsTrue[l] * log((float)(n->stateCountsTrue[l]) / (n->stateCountsTrue[l] + n->stateCountsFalse[l]));
                     }
-                    if (n->stateCountsFalse[l]> 0){
+                    if (n->stateCountsFalse[l]> 0.5){
                         logProb +=  n->stateCountsFalse[l] * log((float)(n->stateCountsFalse[l]) / (n->stateCountsTrue[l] + n->stateCountsFalse[l]));
                     }
                 }

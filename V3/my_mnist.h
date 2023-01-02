@@ -224,7 +224,8 @@ void freeLayeredImagesContinuos(float**** layeredData, int data_size, int depth,
     free(layeredData);
 }
 
-void saveImageContinuos(float ** image, int size, char name[]){
+
+void saveImage(float ** image, int size, char name[], bool binary_representation){
     char file_name[MAX_FILENAME];
     FILE *fp;
     int x, y;
@@ -243,14 +244,21 @@ void saveImageContinuos(float ** image, int size, char name[]){
     fputs("# Created by Image Processing\n", fp);
     fprintf(fp, "%d %d\n", size, size);
     fprintf(fp, "%d\n", 255);
-    for (y=0; y<size; y++)
-        for (x=0; x<size; x++)
-            fputc( (int)(image[y][x] * 255), fp);
+    for (y=0; y<size; y++){
+        for (x=0; x<size; x++){
+            if (binary_representation){
+                fputc( (int)(image[y][x] > 0.5 ? 255: 0), fp);
+            }else {
+                fputc( (int)(image[y][x] * 255), fp);
+            }
+        }
+    }
+
     fclose(fp);
     //printf("Image was saved successfully\n");
 }
 
-void scaleAndSaveImageContinuos(float ** image, int size, char name[], int scale){
+void scaleAndSaveImage(float ** image, int size, char name[], int scale, bool binary_representation){
     int new_size = size * scale;
     float ** scaled_image = malloc(sizeof(float) * size * new_size);
     for (int i = 0; i < new_size; i++){
@@ -259,6 +267,6 @@ void scaleAndSaveImageContinuos(float ** image, int size, char name[], int scale
             scaled_image[i][j] = image[i / scale][j / scale];
         }
     }
-    saveImageContinuos(scaled_image,new_size,name);
+    saveImage(scaled_image,new_size,name,binary_representation);
     freeImageContinuos(scaled_image,new_size);
 }

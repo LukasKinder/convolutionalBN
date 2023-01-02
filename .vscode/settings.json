@@ -6,7 +6,8 @@
         "dataanalysis.h": "c",
         "stdio.h": "c",
         "bayesiannetwork.h": "c",
-        "convolution.h": "c"
+        "convolution.h": "c",
+        "trainnumbernodes.h": "c"
     },
     "cSpell.words": [
         "Supersmalls"

@@ -51,7 +51,7 @@ ConvolutionalBayesianNetwork createConvolutionalBayesianNetwork(int n_layers){
 }
 
 //Todo enable stride and padding
-void addLayerToCbn(ConvolutionalBayesianNetwork cbn, int n_kernels, int kernel_size, int pooling_size, int distance_relation, bool diagonals){
+void addLayerToCbn(ConvolutionalBayesianNetwork cbn, int n_kernels, int kernel_size, int pooling_size, int n_number_nodes, int distance_relation, bool diagonals){
     Kernel * kernels = malloc(sizeof(Kernel) * n_kernels);
     int previous_data_depth = cbn->n_implemented_layers == 0 ? 1 : cbn->bayesianNetworks[ cbn->n_implemented_layers -1]->depth;
     for (int i = 0; i < n_kernels; i++){
@@ -68,7 +68,10 @@ void addLayerToCbn(ConvolutionalBayesianNetwork cbn, int n_kernels, int kernel_s
     data_size = sizeAfterConvolution(data_size,kernels[0]);
     data_size = sizeAfterConvolution(data_size,cbn->poolingKernels[cbn->n_implemented_layers]);
 
-    cbn->bayesianNetworks[cbn->n_implemented_layers] = createBayesianNetwork(data_size, n_kernels,distance_relation,diagonals);
+    cbn->bayesianNetworks[cbn->n_implemented_layers] = createBayesianNetwork(data_size, n_kernels,n_number_nodes,distance_relation,diagonals);
+    
+
+
     cbn->n_implemented_layers++;
 }
 
@@ -85,6 +88,13 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
     for (int j = 0; j < bn->n_numberNodes; j++){
         nn = bn->numberNodes[j];
         n_parent_combinations = (int)(pow(2,nn->n_parents));
+        if (nn->stateCounts == NULL){
+            nn->stateCounts = malloc(sizeof(int *) * n_parent_combinations);
+            for (int k = 0; k < n_parent_combinations; k++){
+                nn->stateCounts[k] = malloc(sizeof(int) * 10);
+            }
+        }
+
         for (int k = 0; k < n_parent_combinations ; k++){
             for (int l  =0; l < 10; l++){
                 nn->stateCounts[k][l] = 0;
@@ -134,7 +144,6 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
 
                 freeLayeredImagesContinuos(temp,n_data,d,s);
             }
-            printf("B\n");
 
             addDataCounts(cbn->bayesianNetworks[layer],layered_images,n_data);
             #pragma omp parallel for
@@ -146,14 +155,11 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
             s = cbn->bayesianNetworks[layer]->size;
             
             freeLayeredImagesContinuos(layered_images,n_data,d,s);
-            printf("C\n");
         }
     }
-    printf("Here\n");
     freeImagesContinuos(images,n_data,28);
     fitCPTs(cbn->bayesianNetworks[layer],pseudocounts);
     free(labels);
-    printf("Here2\n");
 }
 
 
@@ -230,13 +236,55 @@ void setToRandomState(ConvolutionalBayesianNetwork cbn){
 
 
 
-void printImageForEachKernel(float ***layeredImage, int layer, int depth, int size){
-    char name[25] = "rmageLayerXXKernelXX";
-    for (int i  =0; i < depth; i++){
-        name[10] = '0' + layer/10;
-        name[11] = '0' + layer %10;
-        name[18] = '0' + i / 10;
-        name[19] = '0' + i %10;
-        saveImageContinuos(layeredImage[i],size,name);
+void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image){
+    char name[30] = "original_image";
+    int d = 1, size = 28;
+    saveImage(image,size,name,false);
+
+    float *** before = malloc(sizeof(float **) * 1);
+    before[0] = malloc(sizeof(float*) * size);
+    for (int i  =0; i < 28; i++){
+        before[0][i] = malloc(sizeof(float) * size);
+        for (int j  = 0; j < size; j++){
+            before[0][i][j] = image[i][j];
+        }
     }
+
+    
+    float *** after_transitional;
+    float *** after_pooling;
+                        // 012345678901234567890
+    char name_after[30] = "ex_layerXX_kernelXX_b";
+    for (int l = 0; l < cbn->n_layers; l++){
+        after_transitional = malloc(sizeof(float **) * cbn->n_kernels[l]);
+        for (int i = 0; i < cbn->n_kernels[l] ; i++){
+            after_transitional[i] = applyConvolutionWeighted(before,size,size,cbn->transitionalKernels[l][i]);
+        }
+        freeImagesContinuos(before,d,size);
+        d = cbn->n_kernels[l];
+        size = sizeAfterConvolution(size,cbn->transitionalKernels[l][0]);
+
+        after_pooling = applyMaxPooling(after_transitional,size,cbn->poolingKernels[l]);
+        freeImagesContinuos(after_transitional,d,size);
+        size = sizeAfterConvolution(size,cbn->poolingKernels[l]);
+
+        for (int i = 0; i < d; i++){
+            name_after[8] = (char)(l / 10 + '0');
+            name_after[9] = (char)(l + '0');
+
+            name_after[17] = (char)(i / 10 + '0');
+            name_after[18] = (char)(i + '0');
+
+            name_after[20] = 'c';
+            printf("save %s\n",name_after);
+            saveImage(after_pooling[i],size,name_after,false);
+            name_after[20] = 'b';
+            printf("save %s\n",name_after);
+            saveImage(after_pooling[i],size,name_after,true);
+        }
+
+        before = after_pooling;
+    }
+    freeImagesContinuos(before,d,size);
+
 }
