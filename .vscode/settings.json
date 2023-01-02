@@ -5,7 +5,8 @@
         "inference.h": "c",
         "dataanalysis.h": "c",
         "stdio.h": "c",
-        "bayesiannetwork.h": "c"
+        "bayesiannetwork.h": "c",
+        "convolution.h": "c"
     },
     "cSpell.words": [
         "Supersmalls"
