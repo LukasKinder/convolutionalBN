@@ -270,13 +270,6 @@ void removeLastRelationChildParent(BayesianNetwork bn, int d_child, int position
 }
 
 
-
-/*
-previous gains (0.0 = missing value) (10000000000000001 = NA):
-    For each Kernel:
-        After adding i'ths relation
-            bic gain after adding relation
-*/
 bool optimizeStructure(BayesianNetwork bn,  bool **** data, int n_data
         , float *** heuristics, int n_incoming_relations, bool verbose){
 

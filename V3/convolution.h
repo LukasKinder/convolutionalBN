@@ -1,4 +1,6 @@
 
+#define PROMISING_KERNEL_MEAN_MIN 0.005
+#define PROMISING_KERNEL_MEAN_MAX 0.3 //should not be super high, because of max pooling
 
 float sigmoid(float x){
     return 1 / (1 + exp(-x));
@@ -20,6 +22,15 @@ typedef struct Kernel {
     float *** weights; 
   
 }Kernel;
+
+
+int sizeAfterConvolution(int originalSize, Kernel kernel){
+    if (kernel.padding){
+        originalSize += 2 * (kernel.size-1);
+    }
+
+    return (originalSize - kernel.size + 1) / kernel.stride ;
+}
 
 //initializes a kernel with random weights
 Kernel createKernel(int size,int depth, KernelType type, int stride, bool padding){
@@ -79,14 +90,6 @@ void freeKernel(Kernel kernel){
         }
         free(kernel.weights);
     }
-}
-
-int sizeAfterConvolution(int originalSize, Kernel kernel){
-    if (kernel.padding){
-        originalSize += 2 * (kernel.size-1);
-    }
-
-    return (originalSize - kernel.size + 1) / kernel.stride ;
 }
 
 //depth of kernel may not be 1
@@ -212,4 +215,53 @@ float **** dataTransition(float **** dataPrevious, int n_instances, int depth, i
     free(temp);
 
     return newData;
+}
+
+float float_rand( float min, float max ){
+    float scale = rand() / (float) RAND_MAX; /* [0, 1.0] */
+    return min + scale * ( max - min );      /* [min, max] */
+}
+
+//creates a kernel that has at least X % of pixels above and below 0.5
+Kernel createPromisingKernel(int size, int depth, int stride, bool padding, float **** testImages, int test_data_size, int n_test_images, bool verbose){
+    float max_bias = 20, min_bias = -20, mean = 0;
+    float ** kernel_response;
+    Kernel k = createKernel(size,depth,weighted,stride,padding);
+    int iteration  = 0, size_after = sizeAfterConvolution(test_data_size,k);
+
+    while ( (mean < PROMISING_KERNEL_MEAN_MIN) || (PROMISING_KERNEL_MEAN_MAX < mean)){
+        k.bias = float_rand(min_bias,max_bias);
+        if (verbose) printf("CREAT_PROMISING_KERNEL: Iteration %d, testing out bias %f\n",iteration,k.bias);
+        mean  = 0 ;
+        for (int i = 0; i < n_test_images; i++){
+            kernel_response = applyConvolutionWeighted(testImages[i],test_data_size,test_data_size,k);
+            for (int x = 0; x < size_after; x++){
+                for (int y = 0; y < size_after; y++){
+                    if (0.5 < kernel_response[x][y]){
+                        mean += 1.0;
+                    }
+                }
+            }
+            freeImageContinuos(kernel_response,size_after);
+        }
+        mean /= (float) (size_after * size_after * n_test_images);
+        if (mean < PROMISING_KERNEL_MEAN_MIN){
+            min_bias = k.bias;
+        }
+        if (PROMISING_KERNEL_MEAN_MAX < mean){
+            max_bias = k.bias;
+        }
+
+        if (verbose) printf("\t mean is %f\n",mean);
+        iteration += 1;
+        if (iteration > 20){
+            if (verbose) printf("RESET WEIGHTS\n");
+            freeKernel(k);
+            k = createKernel(size,depth,weighted,stride,padding);
+            iteration = 0;
+            max_bias = 20;
+            min_bias = -20;
+        }
+    }
+    return k;
 }

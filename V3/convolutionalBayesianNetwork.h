@@ -137,8 +137,6 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
                     d = cbn->bayesianNetworks[l-1]->depth;
                     s = cbn->bayesianNetworks[l-1]->size;
                 }
-
-                printf("data transition: previous d: %d s: %d, kernel: %d pooling %d, n_kernels %d\n", d,s, cbn->transitionalKernels[l][0].size, cbn->poolingKernels[l].size,  cbn->n_kernels[l]);
                 layered_images = dataTransition(temp,n_data,d,s
                     ,cbn->transitionalKernels[l],cbn->n_kernels[l],cbn->poolingKernels[l]);
 
@@ -163,61 +161,43 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
 }
 
 
-//ToDo rework? or remove?
-/* bool ** getImageFromState(ConvolutionalBayesianNetwork cbn){
-    int image_size = cbn->bayesianNetworks[0]->size;
-    bool ** image = malloc(sizeof(bool*) * image_size);
-    for (int i = 0; i < image_size; i++){
-        image[i] = malloc(sizeof(bool) * image_size);
-        for (int j = 0; j < image_size; j++){
-            image[i][j] = cbn->bayesianNetworks[0]->nodes[0][i][j]->value;
-        }
-    }
-    return image;
-} */
 
 
 void setStateToImage(ConvolutionalBayesianNetwork cbn ,float ** image){
-    BayesianNetwork bn;
-    float *** data = malloc(sizeof(bool **) *1);
-    data[0] = image;
-    float *** tmp;
-    int currentSize = 28;
-    Kernel k;
 
-    setStateToData(cbn->bayesianNetworks[0], data);
-    if (cbn->n_layers == 1){
-        free(data);
-        return;
+    int d = 1, size = 28;
+
+    float *** before = malloc(sizeof(float **) * 1);
+    before[0] = malloc(sizeof(float*) * size);
+    for (int i  =0; i < 28; i++){
+        before[0][i] = malloc(sizeof(float) * size);
+        for (int j  = 0; j < size; j++){
+            before[0][i][j] = image[i][j];
+        }
     }
 
-    for (int i = 1; i < cbn->n_layers; i++){
+    float *** after_transitional;
+    float *** after_pooling;
 
-        bn = cbn->bayesianNetworks[i];
-        tmp = data;
-        data = malloc(sizeof(float**) * bn->depth);
-
-        for (int j = 0; j < bn->depth; j++){
-            k = cbn->transitionalKernels[i][j]; 
-            data[j] = applyConvolutionWeighted(tmp,currentSize,currentSize,k);
+    for (int l = 0; l < cbn->n_layers; l++){
+        after_transitional = malloc(sizeof(float **) * cbn->n_kernels[l]);
+        for (int i = 0; i < cbn->n_kernels[l] ; i++){
+            after_transitional[i] = applyConvolutionWeighted(before,size,size,cbn->transitionalKernels[l][i]);
         }
+        freeImagesContinuos(before,d,size);
+        d = cbn->n_kernels[l];
+        size = sizeAfterConvolution(size,cbn->transitionalKernels[l][0]);
 
-        if (i != 1){
-            freeImagesContinuos(tmp, cbn->bayesianNetworks[i]->depth,cbn->bayesianNetworks[i]->size);
-        }else{
-            free(tmp);
-        }
-        
-        currentSize = sizeAfterConvolution(currentSize,k); //does not matter which kernel exactly
+        after_pooling = applyMaxPooling(after_transitional,size,cbn->poolingKernels[l]);
+        freeImagesContinuos(after_transitional,d,size);
+        size = sizeAfterConvolution(size,cbn->poolingKernels[l]);
 
-        tmp = data;
-        data = applyMaxPooling(tmp,currentSize,cbn->poolingKernels[i]);
-        freeImagesContinuos(tmp, bn->depth,currentSize);
-        currentSize = bn->size;
-        setStateToData(bn, data);
+        setStateToData(cbn->bayesianNetworks[l],after_pooling);
+
+        before = after_pooling;
     }
+    freeImagesContinuos(before,d,size);
 
-    freeImagesContinuos(data, bn->depth,currentSize);
 }
 
 void setToRandomState(ConvolutionalBayesianNetwork cbn){
@@ -237,7 +217,7 @@ void setToRandomState(ConvolutionalBayesianNetwork cbn){
 
 
 void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image){
-    char name[30] = "original_image";
+    char name[30] = "ex_original_image";
     int d = 1, size = 28;
     saveImage(image,size,name,false);
 
