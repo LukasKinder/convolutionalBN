@@ -58,8 +58,6 @@ void addLayerToCbn(ConvolutionalBayesianNetwork cbn, int n_kernels, int kernel_s
         kernels[i] = createKernel(kernel_size,previous_data_depth, weighted,1,false);
     }
 
-    
-
     cbn->transitionalKernels[cbn->n_implemented_layers] = kernels;
     cbn->n_kernels[cbn->n_implemented_layers] = n_kernels;
     cbn->poolingKernels[cbn->n_implemented_layers] = createKernel(pooling_size,n_kernels,pooling,1,false);
@@ -69,9 +67,6 @@ void addLayerToCbn(ConvolutionalBayesianNetwork cbn, int n_kernels, int kernel_s
     data_size = sizeAfterConvolution(data_size,cbn->poolingKernels[cbn->n_implemented_layers]);
 
     cbn->bayesianNetworks[cbn->n_implemented_layers] = createBayesianNetwork(data_size, n_kernels,n_number_nodes,distance_relation,diagonals);
-    
-
-
     cbn->n_implemented_layers++;
 }
 

@@ -1,9 +1,7 @@
 
-void predictionNumberOneLayer(ConvolutionalBayesianNetwork cbn, int layer,  float * prob_dist, long *overall_counts){
+void predictionNumberOneLayer(ConvolutionalBayesianNetwork cbn, int layer,  float * prob_dist){
     BayesianNetwork bn = cbn->bayesianNetworks[layer];
     NumberNode nn;
-    int local_counts;
-    *overall_counts = 0; 
     for (int i = 0; i < 10; i++){
         prob_dist[i] = 0;
     }
@@ -13,8 +11,6 @@ void predictionNumberOneLayer(ConvolutionalBayesianNetwork cbn, int layer,  floa
 
     for (int i = 0; i < bn->n_numberNodes; i++){
         nn = bn->numberNodes[i];
-        local_counts = countsOfStateNumberNode(nn);
-        *overall_counts += local_counts;
 
         for (int i = 0; i < nn->n_parents; i++){
             parent_states[i] = nn->parents[i]->value;
@@ -22,13 +18,12 @@ void predictionNumberOneLayer(ConvolutionalBayesianNetwork cbn, int layer,  floa
 
 
         for (int j = 0; j < 10; j++){
-            prob_dist[j] += local_counts * nn->CPT[binaryToInt(parent_states,nn->n_parents)][j];
+            prob_dist[j] +=  nn->CPT[binaryToInt(parent_states,nn->n_parents)][j];
         }
     }
     for (int j = 0; j < 10; j++){
-        prob_dist[j] /= *overall_counts;
+        prob_dist[j] /= bn->n_numberNodes;
     }
-
     free(parent_states);
 }
 
@@ -36,32 +31,28 @@ void predictionNumberOneLayer(ConvolutionalBayesianNetwork cbn, int layer,  floa
 int predictNumber(ConvolutionalBayesianNetwork cbn, bool verbose ){
     float * overall_prob_dist = calloc(sizeof(float), 10);
     float * local_prob_dist = malloc(sizeof(float) * 10);
-    long overall_counts, layer_counts;
-    overall_counts = 0;
 
     for (int i = 0; i < cbn->n_layers; i++){
-        predictionNumberOneLayer(cbn, i,local_prob_dist, &layer_counts);
+        predictionNumberOneLayer(cbn, i,local_prob_dist);
 
         if (verbose){
-            printf("Probability distribution based on layer %d (%d counts)\n", i, layer_counts);
+            printf("Probability distribution based on layer %d \n", i);
             for (int j = 0; j < 10; j++){
                 printf("%f.3 \t", local_prob_dist[j]);
             }
             printf("\n");
         }
-
-        overall_counts += layer_counts;
         for (int j = 0; j < 10; j++){
-            overall_prob_dist[j] += layer_counts * local_prob_dist[j];
+            overall_prob_dist[j] += local_prob_dist[j];
         }
     }
 
     for (int j = 0; j < 10; j++){
-        overall_prob_dist[j] /= overall_counts;
+        overall_prob_dist[j] /= cbn->n_layers;
     }
 
     if (verbose){
-        printf(" overall probability distribution  (%d counts)\n", overall_counts);
+        printf(" overall probability distribution:\n");
         for (int j = 0; j < 10; j++){
             printf("%f.3 \t", overall_prob_dist[j]);
         }

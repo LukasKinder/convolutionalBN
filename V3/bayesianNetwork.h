@@ -213,9 +213,6 @@ int countsOfStateNumberNode(NumberNode nn){
     return res;
 }
 
-void printBayesianNetwork(BayesianNetwork bn){
-    printf("Bayesian network with depth: %d; size = %d; distanceRelations: %d and %d Number Nodes\n",bn->depth,bn->size,bn->distanceRelation, bn->n_numberNodes);
-}
 
 void printNode(Node n, bool printTables){
     printf("Node at position (d/x/y): %d %d %d\n",n->depth,n->x,n->y);
@@ -411,6 +408,13 @@ void fitDataCountsNumberNode(NumberNode nn, float **** data, int * nn_values, in
 
     int n_parent_combinations = pow(2,nn->n_parents);
 
+    if (nn->stateCounts == NULL){
+        nn->stateCounts = malloc(sizeof(int *) * n_parent_combinations);
+        for (int k = 0; k < n_parent_combinations; k++){
+            nn->stateCounts[k] = malloc(sizeof(int) * 10);
+        }
+    }
+
     //reset state counts to zero
     for (int i = 0; i < n_parent_combinations; i++){
         for (int j = 0; j < 10; j++){
@@ -429,7 +433,6 @@ void fitDataCountsNumberNode(NumberNode nn, float **** data, int * nn_values, in
         }
         row = binaryToInt(parent_combination,nn->n_parents);
         nn->stateCounts[row][nn_values[i]]++;
-
     }
 
     free(parent_combination);
@@ -512,18 +515,11 @@ void addDataCounts(BayesianNetwork bn, float **** data, int data_instances){
 }
 
 
-
-// fit the data (in terms of counts), assumes that parents relations are already known
-//does not fit numberNodes
-void fitDataCounts(BayesianNetwork bn, float **** data, int n_data){
-
-    int i,d,x,y,j;
+void resetAllStateCounts(BayesianNetwork bn){
     Node n;
-
-    //init counting arrays
-    for (d = 0; d < bn->depth; d++){
-        for (x = 0; x < bn->size; x++){
-            for (y = 0; y < bn->size; y++){
+    for (int d = 0; d < bn->depth; d++){
+        for (int x = 0; x < bn->size; x++){
+            for (int y = 0; y < bn->size; y++){
                 n = bn->nodes[d][x][y];
 
                 if (n->stateCountsTrue != NULL) free(n->stateCountsTrue);
@@ -538,15 +534,22 @@ void fitDataCounts(BayesianNetwork bn, float **** data, int n_data){
             }
         }
     }
+}
 
-    #pragma omp parallel for collapse(3)
-    for (d = 0; d < bn->depth; d++){
-        for (x = 0; x < bn->size; x++){
-            for (y = 0; y < bn->size; y++){
+// fit the data (in terms of counts), assumes that parents relations are already known
+//does not fit numberNodes
+void fitDataCounts(BayesianNetwork bn, float **** data, int n_data){
 
-                Node n,parentNode;
+    resetAllStateCounts(bn);
+    
+    bool *parentCombination;
+    Node n,parentNode;
+    #pragma omp parallel for collapse(3) private(n,parentCombination, parentNode)
+    for (int d = 0; d < bn->depth; d++){
+        for (int x = 0; x < bn->size; x++){
+            for (int y = 0; y < bn->size; y++){
                 n = bn->nodes[d][x][y];
-                bool *parentCombination = malloc(sizeof(bool) * n->n_parents);
+                parentCombination = malloc(sizeof(bool) * n->n_parents);
 
                 for (int i = 0; i < n_data; i++){
                     for (int j = 0; j < n->n_parents; j++ ){
@@ -646,6 +649,50 @@ float logMaxLikelihoodDataGivenModelOneLevel(BayesianNetwork bn, float **** data
 
 }
 
+//requires that the state counts are already known
+double logMaxLikelihoodDataNumberNode(NumberNode nn){
+
+    int n_rows = pow(2, nn->n_parents);
+    int n_counts_row;
+    double result = 0;
+    for (int i = 0; i < n_rows; i++){
+        n_counts_row = 0;
+        for(int j = 0; j < 10; j++){
+            n_counts_row += nn->stateCounts[i][j];
+        }
+
+        for(int j = 0; j< 10;j++){
+            if (nn->stateCounts[i][j] != 0){
+                result += (float)(nn->stateCounts[i][j]) * log( (float)(nn->stateCounts[i][j]) / (float)(n_counts_row));
+            }
+        }
+    }
+    return result;
+}
+
+//requires that the state counts are already known
+double logLikelihoodDataNumberNodeNoRelations(NumberNode nn){
+    int n_rows = pow(2, nn->n_parents);
+    int * n_state = calloc(10, sizeof(int));
+    double result = 0;
+    int counts = 0;
+    for (int i = 0; i < n_rows; i++){
+        for(int j = 0; j< 10;j++){
+            n_state[j] += nn->stateCounts[i][j];
+            counts += nn->stateCounts[i][j];
+        }
+    }
+
+    for(int j = 0; j< 10;j++){
+        if (n_state[j] != 0){
+            result += (float)(n_state[j]) * log( (float)(n_state[j]) / (float)(counts));
+        }
+    }
+
+    free(n_state);
+    return result;
+}
+
 //calls fitDataCounts if updateCounts == true
 //does not consider number nodes
 float logMaxLikelihoodDataGivenModel(BayesianNetwork bn, float**** data, int n_instances, bool updateCounts){
@@ -663,12 +710,40 @@ float logMaxLikelihoodDataGivenModel(BayesianNetwork bn, float**** data, int n_i
                 n = bn->nodes[i][j][k];
                 for (l = 0; l < (int)(pow(2,n->n_parents));l++ ){
 
-                    if (n->stateCountsTrue[l]> 0.5){
+                    if (n->stateCountsTrue[l]> 0){
                         logProb +=  n->stateCountsTrue[l] * log((float)(n->stateCountsTrue[l]) / (n->stateCountsTrue[l] + n->stateCountsFalse[l]));
                     }
-                    if (n->stateCountsFalse[l]> 0.5){
+                    if (n->stateCountsFalse[l]> 0){
                         logProb +=  n->stateCountsFalse[l] * log((float)(n->stateCountsFalse[l]) / (n->stateCountsTrue[l] + n->stateCountsFalse[l]));
                     }
+                }
+            }
+        }
+    }
+
+    return logProb;
+}
+
+float logLikelihoodDataGivenModelNoRelations(BayesianNetwork bn){
+    int i,j,k,l, n_true, n_false;
+    float logProb = 0;
+    Node n;
+
+    for ( i = 0; i < bn->depth; i++){
+        for ( j = 0; j < bn->size; j++){
+            for ( k = 0; k < bn->size; k++){
+                n = bn->nodes[i][j][k];
+                n_true = 0;
+                n_false = 0;
+                for (l = 0; l < (int)(pow(2,n->n_parents));l++ ){
+                    n_true += n->stateCountsTrue[l];
+                    n_false += n->stateCountsFalse[l];
+                }
+                if (n_true > 0){
+                    logProb +=  n_true * log((float)(n_true) / (n_true + n_false ));
+                }
+                if (n_false > 0){
+                    logProb +=  n_false  * log((float)(n_false ) / (n_true + n_false ));
                 }
             }
         }
@@ -736,5 +811,27 @@ float bicOneLevel(BayesianNetwork bn, float **** data, int n_data, int level, bo
             * logMaxLikelihoodDataGivenModelOneLevel(bn,data,n_data, level);
 }
 
+
+void printBayesianNetwork(BayesianNetwork bn){
+    printf("Bayesian network with depth: %d; size = %d; distanceRelations: %d and %d Number Nodes\n",bn->depth,bn->size,bn->distanceRelation, bn->n_numberNodes);
+
+
+    float log_prob_data_relations = logMaxLikelihoodDataGivenModel(bn,NULL,0, false);
+    float log_prob_data_no_relations = logLikelihoodDataGivenModelNoRelations(bn);
+    int n_parameters_nodes = numberParameters(bn);
+    int n_parameters_nn = 9 * pow(2,bn->numberNodes[0]->n_parents) * bn->n_numberNodes;
+
+    float logLNumberNodes = 0;
+    for (int i = 0; i < bn->n_numberNodes; i++){
+        logLNumberNodes += logMaxLikelihoodDataNumberNode(bn->numberNodes[i]);
+    }
+
+    float logLNumberNodesNoRelations = 0;
+    for (int i = 0; i < bn->n_numberNodes; i++){
+        logLNumberNodesNoRelations += logLikelihoodDataNumberNodeNoRelations(bn->numberNodes[i]);
+    }
+
+    printf("Likelihood of nodes give data   = %.0f\nLikelihood of node no relations = %.0f\nn_parameters nodes              = %d\n\nLikelihood nn of data           = %.0f\nLikelihood nn no relations      = %.0f\nn_parameters numbernodes        = %d\n",log_prob_data_relations,log_prob_data_no_relations,n_parameters_nodes,logLNumberNodes,logLNumberNodesNoRelations,n_parameters_nn);
+}
 
 

@@ -188,18 +188,41 @@ float ** applyConvolutionWeighted(float*** data, int data_size_x, int data_size_
     return new_data;
 }
 
+//with replacement!
+//TODO: do not reallocate subset data every time!
+void dataTransitionSubset(float **** dataPrevious, int n_data, int depth, int size, Kernel *kernels, int n_kernels, Kernel poolingKernel, int subset_size, float **** subset_data,  int * labels, int * subset_labels){
+    float*** temp ;
+    int sizeAfterNormalConvolution = sizeAfterConvolution(size, kernels[0]);
+    int random_index;
 
-float **** dataTransition(float **** dataPrevious, int n_instances, int depth, int size, Kernel *kernels, int n_kernels, Kernel poolingKernel){
-    float**** newData = malloc(sizeof(float***) * n_instances);
-    float**** temp = malloc(sizeof(float***) * n_instances);;
+    #pragma omp parallel for private(random_index, temp)
+    for (int  i = 0; i < subset_size; i++){
+        subset_data[i] = malloc(sizeof(float **) * n_kernels);
+        random_index = rand() % n_data;
+        subset_labels[i] = labels[random_index];
+
+        #pragma omp parallel for
+        for (int j = 0; j < n_kernels;j++){
+            subset_data[i][j] = applyConvolutionWeighted(dataPrevious[random_index],size,size,kernels[j]);
+        }
+
+        if (poolingKernel.size != 1){
+            temp = subset_data[i];
+            subset_data[i] = applyMaxPooling(temp,sizeAfterNormalConvolution,poolingKernel);
+            freeImagesContinuos(temp,n_kernels,sizeAfterNormalConvolution);
+        }
+    }
+}
+
+float **** dataTransition(float **** dataPrevious, int n_data, int depth, int size, Kernel *kernels, int n_kernels, Kernel poolingKernel){
+    float**** newData = malloc(sizeof(float***) * n_data);
+    float*** temp;
     int sizeAfterNormalConvolution = sizeAfterConvolution(size, kernels[0]); //assume that all kernels lead to same size
 
-    for (int  i = 0; i < n_instances; i++){
-        newData[i] = malloc(sizeof(float **) * n_kernels);
-    }
 
-    #pragma omp parallel for
-    for (int  i = 0; i < n_instances; i++){
+    #pragma omp parallel for private(temp)
+    for (int  i = 0; i < n_data; i++){
+        newData[i] = malloc(sizeof(float **) * n_kernels);
 
         #pragma omp parallel for
         for (int j = 0; j < n_kernels;j++){
@@ -207,13 +230,11 @@ float **** dataTransition(float **** dataPrevious, int n_instances, int depth, i
         }
 
         if (poolingKernel.size != 1){
-            temp[i] = newData[i];
-            newData[i] = applyMaxPooling(temp[i],sizeAfterNormalConvolution,poolingKernel);
-            freeImagesContinuos(temp[i],n_kernels,sizeAfterNormalConvolution);
+            temp = newData[i];
+            newData[i] = applyMaxPooling(temp,sizeAfterNormalConvolution,poolingKernel);
+            freeImagesContinuos(temp,n_kernels,sizeAfterNormalConvolution);
         }
     }
-    free(temp);
-
     return newData;
 }
 

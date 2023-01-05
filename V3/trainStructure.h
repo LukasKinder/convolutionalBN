@@ -15,28 +15,6 @@ void setValuesNumberNode(ConvolutionalBayesianNetwork cbn, int value){
 
 
 
-//requires that the state counts are already known
-double logMaxLikelihoodDataNumberNode(NumberNode nn){
-
-    int n_rows = pow(2, nn->n_parents);
-    int n_counts_row;
-    double result = 0;
-    for (int i = 0; i < n_rows; i++){
-        n_counts_row = 0;
-        for(int j = 0; j < 10; j++){
-            n_counts_row += nn->stateCounts[i][j];
-        }
-
-        for(int j = 0; j< 10;j++){
-            if (nn->stateCounts[i][j] != 0){
-                result += (float)(nn->stateCounts[i][j]) * log( (float)(nn->stateCounts[i][j]) / (float)(n_counts_row));
-            }
-        }
-    }
-    return result;
-}
-
-
 void sampleData(float **** data, int * data_labels ,int n_data, float **** sample, int * sample_labels, int n_samples){
     int rand_index;
     for (int i = 0; i < n_samples; i++){
