@@ -114,7 +114,98 @@ void updateKernels(Kernel * kernels, int n_kernels, int kernel_depth, int kernel
     }
 }
 
-void calculateGradientImage(BayesianNetwork bn, int n_kernels, float *** representation_before, Kernel * kernels, Kernel poolingKernel, float nodeFraction ){
+/* 
+bool * parent_states = malloc(sizeof(bool) * nn->n_parents);
+double result;
+for (int i = 0; i < nn->n_parents; i++){
+    parent_states[i] = nn->parents[i]->value;
+}
+result = nn->CPT[binaryToInt(parent_states,nn->n_parents)][nn->value];
+free(parent_states);
+ */
+
+float prob_nn_given_data_dependent_n(NumberNode nn, Node n, bool n_value, int number_label, float *** data){
+    Node parent;
+    float prob;
+    int counts_row, row_number;
+    bool * parent_states = malloc(sizeof(bool) * nn->n_parents);
+    for (int j = 0; j < nn->n_parents; j++){
+        parent = nn->parents[j];
+        if (parent->x == n->x && parent->y == n->y && parent->depth == n->depth){
+            parent_states[j] = n_value;
+        } else {
+            parent_states[j]  = 0.5 < data[parent->depth][parent->x][parent->y];
+        }
+    }
+    row_number = binaryToInt(parent_states,nn->n_parents);
+    counts_row = 0;
+    for (int j = 0; j < 10; j++){
+        counts_row += nn->stateCounts[counts_row][j];
+    }
+
+    prob = (float)(nn->stateCounts[counts_row][number_label]) / (float)(counts_row);
+    free(parent_states);
+    return prob;
+}
+
+//assumes that nn is set to the correct state already
+void calculateGradientNumberNodeChildren(float *** gradient, Node n, Kernel kernel, int n_kernels, Kernel poolingKernel, float *** data_before
+    ,int before_depth, int before_size, float *** data_intermediate_before_sigmoid, int size_intermediate, float *** data_after, int number_label){
+    
+    NumberNode nn;
+    int x_pooling, y_pooling, responseX, responseY;
+    float prob_if_true, prob_if_false, a, value, max_value;
+    for (int i = 0; i < n->n_numberNodeChildren; i++){
+        nn = n->numberNodeChildren[i];
+        prob_if_true = prob_nn_given_data_dependent_n(nn,n,true,number_label,data_after);
+        prob_if_false = prob_nn_given_data_dependent_n(nn,n,false,number_label,data_after);
+
+        //how to change in order to increase probability
+        a = prob_if_true  - prob_if_false;
+
+        //find node position responsible for value via pooling
+        responseX = n->x * poolingKernel.stride - (poolingKernel.padding ? poolingKernel.size -1: 0);
+        responseY = n->y * poolingKernel.stride - (poolingKernel.padding ? poolingKernel.size -1: 0);
+        max_value = -999999999;
+        for (int x = responseX; x < responseX +  poolingKernel.size; x++){
+            for (int y = responseY; y < responseY + poolingKernel.size; y++ ){
+                if (x < 0 || y < 0 || x >= size_intermediate || y >= size_intermediate){
+                    continue;; //out of bound because of padding
+                }
+                value = data_intermediate_before_sigmoid[n->depth][x][y];
+                if (max_value < value){ //alreanativly (value == sigmoid(value) == data_after[n->depth][x][y]) shoudl work as well
+                    max_value = value;
+                    x_pooling = x;
+                    y_pooling = y;
+                }
+                
+            }
+        }
+
+        //multiply by sigmoid derivative
+        a *= sigmoid(data_intermediate_before_sigmoid[n->depth][x_pooling][y_pooling]) 
+            * (1 - data_intermediate_before_sigmoid[n->depth][x_pooling][y_pooling]);
+
+        //add to gradient
+        responseX = x_pooling * kernel.stride - (kernel.padding ? kernel.size -1: 0);
+        responseY = y_pooling  * kernel.stride - (kernel.padding ? kernel.size -1: 0);
+        for (int d = 0; d < before_depth; d++){
+            for (int x = responseX; x < responseX +  kernel.size; x++){
+                for (int y = responseY; y < responseY + kernel.size; y++ ){
+
+                    //check if out of bound (could be, because of padding)
+                    if (0 < x && x < before_size && 0 < y && y < before_size ){
+                        //dependent on how high the value based on it actually is
+                        gradient[d][x][y] += data_before[d][x][y] * a;
+                    }
+                    
+                }
+            }
+        }
+    }
+}
+
+void calculateGradientImage(BayesianNetwork bn, Kernel * kernels, int n_kernels, Kernel poolingKernel,float *** representation_before, int n_data, float nodeFraction ){
     //nothing for now
 }
 
@@ -127,7 +218,7 @@ void calculateGradient(BayesianNetwork bn, float **** gradient, int n_kernels, f
     for (int i = 0; i < batchSize; i++){
         example = data_before[rand() % n_data];
         
-        calculateGradientImage(bn,n_kernels,example,kernels, poolingKernel,batchNodeFraction);
+        calculateGradientImage(bn,kernels, n_kernels,poolingKernel,data_before[i],n_data,batchNodeFraction);
 
     }
 
