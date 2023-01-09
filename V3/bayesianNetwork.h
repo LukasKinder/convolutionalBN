@@ -261,10 +261,16 @@ void printNumberNode(NumberNode nn, bool printTables){
     }
     printf("\n");
     int n_parent_configurations = (int)(pow(2,nn->n_parents));
+    int sum;
     if (printTables){
         printf("Counts (%d):\n",n_parent_configurations);
         for (int i = 0; i < n_parent_configurations ; i++){
-            printf("ParentConfiguration %d:",i);
+            sum = 0;
+            for(int j = 0; j < 10; j++){
+                sum +=  nn->stateCounts[i][j];
+            }
+
+            printf("ParentConfiguration %d (%d coutns):",i, sum);
             for(int j = 0; j < 10; j++){
                 printf("\t%d", nn->stateCounts[i][j]);
             }
@@ -272,16 +278,17 @@ void printNumberNode(NumberNode nn, bool printTables){
         }
         printf("\n");
         
-
-        printf("CBT(%d):\n",n_parent_configurations);
-        for (int i = 0; i < n_parent_configurations ; i++){
-            printf("ParentConfiguration %d:",i);
-            for(int j = 0; j < 10; j++){
-                printf("\t%f" , nn->CPT[i][j]);
+        if (nn->CPT != NULL){
+            printf("CBT(%d):\n",n_parent_configurations);
+            for (int i = 0; i < n_parent_configurations ; i++){
+                printf("ParentConfiguration %d:",i);
+                for(int j = 0; j < 10; j++){
+                    printf("\t%f" , nn->CPT[i][j]);
+                }
+                printf("\n");
             }
             printf("\n");
         }
-        printf("\n");
     }
 }
 
@@ -424,6 +431,7 @@ void fitDataCountsNumberNode(NumberNode nn, float **** data, int * nn_values, in
 
     bool * parent_combination = malloc(sizeof(bool) * nn->n_parents);
     int row, parent_d, parent_x, parent_y;
+    int X  =0;
     for (int i = 0; i < n_data; i++){
         for(int j = 0; j < nn->n_parents; j++){
             parent_d = nn->parents[j]->depth;
@@ -433,6 +441,7 @@ void fitDataCountsNumberNode(NumberNode nn, float **** data, int * nn_values, in
         }
         row = binaryToInt(parent_combination,nn->n_parents);
         nn->stateCounts[row][nn_values[i]]++;
+        X++;
     }
 
     free(parent_combination);
@@ -625,6 +634,10 @@ void fitCPTs(BayesianNetwork bn, float pseudoCounts){
 
 //does not regard number nodes
 float logMaxLikelihoodDataGivenModelOneLevel(BayesianNetwork bn, float **** data,int n_data,int level){
+    if (n_data = 0){
+        return 0;
+    }
+
     fitDataCountsOneLevel(bn,data,n_data,level);
     
     int j,k,l;
@@ -708,6 +721,10 @@ float logMaxLikelihoodDataGivenModel(BayesianNetwork bn, float**** data, int n_i
         for ( j = 0; j < bn->size; j++){
             for ( k = 0; k < bn->size; k++){
                 n = bn->nodes[i][j][k];
+                if (n->stateCountsTrue == NULL){
+                    printf("ERROR: state counts do not seem to be learned");
+                    exit(1);
+                }
                 for (l = 0; l < (int)(pow(2,n->n_parents));l++ ){
 
                     if (n->stateCountsTrue[l]> 0){

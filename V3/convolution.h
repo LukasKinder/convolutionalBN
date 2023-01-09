@@ -3,7 +3,7 @@
 #define PROMISING_KERNEL_MEAN_MAX 0.3 //should not be super high, because of max pooling
 
 float sigmoid(float x){
-    return 1 / (1 + exp(-x));
+    return 1 / (1 + exp(- 10 *x));
 }
 
 typedef enum KernelType {
@@ -69,9 +69,9 @@ void printKernel(Kernel kernel){
             for (int i = 0; i < kernel.size; i++){
                 for (int j = 0; j < kernel.size; j ++){
                     if (kernel.weights[k][i][j] < 0){
-                        printf("%.1f ",kernel.weights[k][i][j]);
+                        printf("%.3f ",kernel.weights[k][i][j]);
                     }else {
-                        printf(" %.1f ",kernel.weights[k][i][j]);
+                        printf(" %.3f ",kernel.weights[k][i][j]);
                     }
                 }
                 printf("\n");
@@ -129,7 +129,6 @@ float ** applyMaxPoolingOneLayer(float ** data, int data_size_x,int data_size_y,
     }
     
     return newData;
-
 }
 
 
@@ -148,7 +147,7 @@ float *** applyMaxPooling(float ***data, int data_size, Kernel kernel){
     return newData;
 }
 
-float ** applyConvolutionWeighted(float*** data, int data_size_x, int data_size_y, Kernel kernel){
+float ** applyConvolutionWeighted(float*** data, int data_size_x, int data_size_y, Kernel kernel, bool apply_sigmoid){
 
     int responseX, responseY,x,y,i,j,d;
     int newSize_x = sizeAfterConvolution(data_size_x,kernel);
@@ -181,8 +180,11 @@ float ** applyConvolutionWeighted(float*** data, int data_size_x, int data_size_
                     }
                 }
             }
-            new_data[x][y] = sigmoid( sum + kernel.bias);
-            
+
+            new_data[x][y] = sum + kernel.bias;
+            if (apply_sigmoid){
+                new_data[x][y] = sigmoid(new_data[x][y]);
+            } 
         }
     }
     return new_data;
@@ -203,7 +205,7 @@ void dataTransitionSubset(float **** dataPrevious, int n_data, int depth, int si
 
         #pragma omp parallel for
         for (int j = 0; j < n_kernels;j++){
-            subset_data[i][j] = applyConvolutionWeighted(dataPrevious[random_index],size,size,kernels[j]);
+            subset_data[i][j] = applyConvolutionWeighted(dataPrevious[random_index],size,size,kernels[j],true);
         }
 
         if (poolingKernel.size != 1){
@@ -226,7 +228,7 @@ float **** dataTransition(float **** dataPrevious, int n_data, int depth, int si
 
         #pragma omp parallel for
         for (int j = 0; j < n_kernels;j++){
-            newData[i][j] = applyConvolutionWeighted(dataPrevious[i],size,size,kernels[j]);
+            newData[i][j] = applyConvolutionWeighted(dataPrevious[i],size,size,kernels[j],true);
         }
 
         if (poolingKernel.size != 1){
@@ -255,7 +257,7 @@ Kernel createPromisingKernel(int size, int depth, int stride, bool padding, floa
         if (verbose) printf("CREAT_PROMISING_KERNEL: Iteration %d, testing out bias %f\n",iteration,k.bias);
         mean  = 0 ;
         for (int i = 0; i < n_test_images; i++){
-            kernel_response = applyConvolutionWeighted(testImages[i],test_data_size,test_data_size,k);
+            kernel_response = applyConvolutionWeighted(testImages[i],test_data_size,test_data_size,k,true);
             for (int x = 0; x < size_after; x++){
                 for (int y = 0; y < size_after; y++){
                     if (0.5 < kernel_response[x][y]){

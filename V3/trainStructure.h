@@ -1,8 +1,4 @@
 
-#define NUMBER_NODE_DATA_PER_CONFIGURATION 200
-#define STRUCTURE_SEARCH_DATA_PER_CONFIGURATION 40
-#define NUMBER_NODE_PARENT_SUBSET_SIZE 0.03
-
 void setValuesNumberNode(ConvolutionalBayesianNetwork cbn, int value){
     BayesianNetwork bn;
     for (int i = 0; i < cbn->n_layers; i++){
@@ -24,7 +20,8 @@ void sampleData(float **** data, int * data_labels ,int n_data, float **** sampl
     }
 }
 
-void learnStructureNumberNodes(int n_relations, int layer, BayesianNetwork bn, float **** layered_images, int * number_labels, int n_data, bool verbose){
+void learnStructureNumberNodes(int n_relations, int layer, BayesianNetwork bn, float **** layered_images, int * number_labels, int n_data
+    , int number_node_data_per_row, float number_node_parent_subset_size, bool verbose){
 
     //checking for potential problems:
     int n_nodes  =bn->n_numberNodes;
@@ -32,7 +29,7 @@ void learnStructureNumberNodes(int n_relations, int layer, BayesianNetwork bn, f
         printf("Error: number nodes do not exist");
         exit(0);
     }
-    int data_needed =  NUMBER_NODE_DATA_PER_CONFIGURATION * pow(2, n_relations -1);
+    int data_needed =  number_node_data_per_row * pow(2, n_relations -1);
     if (data_needed > n_data){
         printf("Warning: not enough data for number node structure search with %d relations\n", n_relations);
         data_needed = n_data;
@@ -45,15 +42,25 @@ void learnStructureNumberNodes(int n_relations, int layer, BayesianNetwork bn, f
     int n_parent_combinations = pow(2, n_relations);
     for (int i = 0; i < n_nodes; i++){
         nn = bn->numberNodes[i];
-        nn->n_parents = 0;
 
-        if (nn->parents == NULL) nn->parents = malloc(sizeof(Node) * n_relations);
-        if (nn->stateCounts == NULL){
-            nn->stateCounts = malloc(sizeof(int *) * n_parent_combinations);
-            for (int j = 0; j < n_parent_combinations; j++){
-                nn->stateCounts[j] = malloc(sizeof(int) * 10); //for 0-9
+        if (nn->parents != NULL ){
+            free(nn->parents);
+        }
+        nn->parents = malloc(sizeof(Node) * n_relations);
+
+        if (nn->stateCounts != NULL){
+            for (int j = 0; j < pow(2, nn->n_parents); j++){
+                free(nn->stateCounts[j]);
             }
+            free(nn->stateCounts);
         } 
+
+        nn->stateCounts = malloc(sizeof(int *) * n_parent_combinations);
+        for (int j = 0; j < n_parent_combinations; j++){
+            nn->stateCounts[j] = malloc(sizeof(int) * 10); //for 0-9
+        }
+
+        nn->n_parents = 0;
     }
     for (int d = 0; d < bn->depth; d++){
         for (int x = 0; x < bn->size; x++){
@@ -87,7 +94,7 @@ void learnStructureNumberNodes(int n_relations, int layer, BayesianNetwork bn, f
         for (int r = 0; r < n_relations; r++){
             if (verbose) printf("\t\tLEARN_NN: adding relation %d of %d \n",r,n_relations);
 
-            bootstrapSize = NUMBER_NODE_DATA_PER_CONFIGURATION * pow(2, r);
+            bootstrapSize = number_node_data_per_row * pow(2, r);
             bootstrapSize = bootstrapSize > n_data ? n_data : bootstrapSize;
 
             best_heuristic = -999999999999;
@@ -95,7 +102,7 @@ void learnStructureNumberNodes(int n_relations, int layer, BayesianNetwork bn, f
                 for (int x  =0; x < bn->size; x++){
                     for (int y  = 0; y < bn->size; y++){
 
-                        if ((float)rand() / (float)(RAND_MAX ) > NUMBER_NODE_PARENT_SUBSET_SIZE) continue;
+                        if ((float)rand() / (float)(RAND_MAX ) > number_node_parent_subset_size) continue;
 
                         if (verbose) printf("\t\t\tLEARN_NN: mode ad %d %d %d considered \n",d,x,y);
 
@@ -176,7 +183,6 @@ void addRelationChildParent(BayesianNetwork bn, int d_child, int position_parent
 
             child = bn->nodes[d_child][x][y];
             parent = bn->nodes[d_parent][x + distance_vertically][y + distance_horizontally];
-
             if (child->parents == NULL){
                 printf("Error: parent array of node is NULL\n");
                 exit(1);
@@ -258,13 +264,14 @@ bool optimizeStructureUsingStructureHeuristic(BayesianNetwork bn,  float **** da
         for(int j = 0; j < bn->size; j++){
             for (int k = 0; k < bn->size; k++){
                 n = bn->nodes[i][j][k];
-                if (n->parents == NULL){ 
-                    n->parents = malloc(sizeof(Node) * n_incoming_relations);
-                }
+
+                if (n->parents != NULL) free(n->parents);
+                n->parents = malloc(sizeof(Node) * n_incoming_relations);
+                
                 n->n_parents = 0; 
-                if (n->children == NULL){ 
-                    n->children = malloc(sizeof(Node) * n_possibly_incoming_directions);
-                }
+                if (n->children != NULL) free(n->children);
+                n->children = malloc(sizeof(Node) * n_possibly_incoming_directions);
+                
                 n->n_children = 0; 
             }
         }
@@ -345,7 +352,8 @@ void freeStructureHeuristic(float *** structure_heuristic, int depth, int n_rela
 }
 
 //update all values with 0.0 as well as all if building on previous 0.0 value
-int  updateStructureHeuristics(float *** structureHeuristic,int n_relations,  BayesianNetwork bn, float **** data, int n_data,bool verbose){
+int  updateStructureHeuristics(float *** structureHeuristic,int n_relations,  BayesianNetwork bn, float **** data, int n_data
+    ,int data_per_row_n, bool verbose){
     int  n_directions_relations = bn->diagonals ? 4  * bn->depth : 2 * bn->depth;
     int n_updates = 0;
 
@@ -398,7 +406,7 @@ int  updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
                 if (current == 0.0 || best_is_new){
                     if (verbose) printf("Must update because missing or previous was new\n");
 
-                    data_used = (int)(pow(2,n_relation)) * STRUCTURE_SEARCH_DATA_PER_CONFIGURATION ;
+                    data_used = (int)(pow(2,n_relation)) * data_per_row_n;
                     if (data_used > n_data){
                         //printf("WARNING: it is not enough data instances per configuration\n");
                         data_used = n_data;
@@ -435,19 +443,26 @@ int  updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
     return n_updates;
 }
 
-void learnStructureConvolutionalNodes(BayesianNetwork bn, int n_relations,float **** layered_images, int n_data){
+void learnStructureConvolutionalNodes(BayesianNetwork bn, int n_relations,float **** layered_images, int n_data, int data_per_row_n){
     
     float *** structure_heuristics = initStructureHeuristic(bn->depth,n_relations,bn->diagonals);
-    int n_updates = updateStructureHeuristics(structure_heuristics,n_relations,bn,layered_images,n_data,false);
+    int n_updates = updateStructureHeuristics(structure_heuristics,n_relations,bn,layered_images,n_data,data_per_row_n,false);
     optimizeStructureUsingStructureHeuristic(bn,layered_images,n_data,structure_heuristics,n_relations,false);
     freeStructureHeuristic(structure_heuristics,bn->depth,n_relations);
 }
 
 
 
-void optimizeStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incoming_relations, float *** images, int * labels, int n_data, bool verbose){
+void optimizeStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incoming_relations, float *** images, int * labels, int n_data
+    ,int number_node_data_per_row, float number_node_parent_subset_size, int data_per_row_n, bool verbose){
 
     BayesianNetwork bn = cbn->bayesianNetworks[layer];
+    if ((bn->diagonals ? 4 : 2) * bn->depth < n_incoming_relations){
+        n_incoming_relations = (bn->diagonals ? 4 : 2) * bn->depth;
+        printf("Warning: can not ad as many relations! use %d instead\n", n_incoming_relations);
+
+    }
+
     //set data to data of layer
     float ****temp, **** layered_images = imagesToLayeredImagesContinuos(images,n_data,28);
     int d = 1,s = 28;
@@ -461,8 +476,8 @@ void optimizeStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incomi
         s = cbn->bayesianNetworks[l]->size;
     }
 
-    learnStructureNumberNodes(n_incoming_relations,layer,bn,layered_images,labels,n_data,verbose);
-    learnStructureConvolutionalNodes(bn,n_incoming_relations,layered_images,n_data);
+    learnStructureNumberNodes(n_incoming_relations,layer,bn,layered_images,labels,n_data,number_node_data_per_row,number_node_parent_subset_size,verbose);
+    learnStructureConvolutionalNodes(bn,n_incoming_relations,layered_images,n_data,data_per_row_n);
 
     freeLayeredImagesContinuos(layered_images,n_data,bn->depth,bn->size);
 }
@@ -483,14 +498,15 @@ void addRandomStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incom
         for(int j = 0; j < bn->size; j++){
             for (int k = 0; k < bn->size; k++){
                 n = bn->nodes[i][j][k];
-                if (n->parents == NULL){ 
-                    n->parents = malloc(sizeof(Node) * n_incoming_relations);
-                }
+                if (n->parents != NULL) free(n->parents);
+                n->parents = malloc(sizeof(Node) * n_incoming_relations);
+                
                 n->n_parents = 0; 
-                if (n->children == NULL){ 
-                    n->children = malloc(sizeof(Node) * n_possibly_incoming_directions);
-                }
+                if (n->children != NULL) free(n->children);
+                n->children = malloc(sizeof(Node) * n_possibly_incoming_directions);
+                
                 n->n_children = 0; 
+                n->n_numberNodeChildren = 0;
             }
         }
     }
@@ -524,9 +540,10 @@ void addRandomStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incom
 
     for (int j = 0; j < bn->n_numberNodes; j++){
         nn = bn->numberNodes[j];
-        if (nn->parents == NULL){
-            nn->parents = malloc(sizeof(Node) * n_incoming_relations);
-        }
+        if (nn->parents != NULL) free(nn->parents);
+        nn->parents = malloc(sizeof(Node) * n_incoming_relations);
+        nn->n_parents = 0;
+        
 
         for (int i = 0; i < n_incoming_relations; i++){
             already_exists_flag = true;

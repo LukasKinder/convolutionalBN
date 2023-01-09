@@ -177,7 +177,7 @@ void setStateToImage(ConvolutionalBayesianNetwork cbn ,float ** image){
     for (int l = 0; l < cbn->n_layers; l++){
         after_transitional = malloc(sizeof(float **) * cbn->n_kernels[l]);
         for (int i = 0; i < cbn->n_kernels[l] ; i++){
-            after_transitional[i] = applyConvolutionWeighted(before,size,size,cbn->transitionalKernels[l][i]);
+            after_transitional[i] = applyConvolutionWeighted(before,size,size,cbn->transitionalKernels[l][i],true);
         }
         freeImagesContinuos(before,d,size);
         d = cbn->n_kernels[l];
@@ -233,7 +233,7 @@ void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image
     for (int l = 0; l < cbn->n_layers; l++){
         after_transitional = malloc(sizeof(float **) * cbn->n_kernels[l]);
         for (int i = 0; i < cbn->n_kernels[l] ; i++){
-            after_transitional[i] = applyConvolutionWeighted(before,size,size,cbn->transitionalKernels[l][i]);
+            after_transitional[i] = applyConvolutionWeighted(before,size,size,cbn->transitionalKernels[l][i],true);
         }
         freeImagesContinuos(before,d,size);
         d = cbn->n_kernels[l];
@@ -245,14 +245,67 @@ void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image
 
         for (int i = 0; i < d; i++){
             name_after[8] = (char)(l / 10 + '0');
-            name_after[9] = (char)(l + '0');
+            name_after[9] = (char)((l % 10)+ '0');
 
             name_after[17] = (char)(i / 10 + '0');
-            name_after[18] = (char)(i + '0');
+            name_after[18] = (char)((i % 10) + '0');
 
             name_after[20] = 'c';
+            //printf("save %s\n",name_after);
+            //saveImage(after_pooling[i],size,name_after,false);
+            name_after[20] = 'b';
             printf("save %s\n",name_after);
-            saveImage(after_pooling[i],size,name_after,false);
+            saveImage(after_pooling[i],size,name_after,true);
+        }
+
+        before = after_pooling;
+    }
+    freeImagesContinuos(before,d,size);
+
+}
+
+void saveKernelResponsesOfImageExperimental(ConvolutionalBayesianNetwork cbn, float ** image){
+    char name[30] = "ex_original_image";
+    int d = 1, size = 28;
+    saveImage(image,size,name,false);
+
+    float *** before = malloc(sizeof(float **) * 1);
+    before[0] = malloc(sizeof(float*) * size);
+    for (int i  =0; i < 28; i++){
+        before[0][i] = malloc(sizeof(float) * size);
+        for (int j  = 0; j < size; j++){
+            before[0][i][j] = image[i][j];
+        }
+    }
+
+    
+    float *** after_transitional;
+    float *** after_pooling;
+                        // 012345678901234567890
+    char name_after[30] = "ex_layerXX_kernelXX_b_before";
+    for (int l = 0; l < cbn->n_layers; l++){
+        after_transitional = malloc(sizeof(float **) * cbn->n_kernels[l]);
+        for (int i = 0; i < cbn->n_kernels[l] ; i++){
+            after_transitional[i] = applyConvolutionWeighted(before,size,size,cbn->transitionalKernels[l][i],true);
+        }
+        freeImagesContinuos(before,d,size);
+        d = cbn->n_kernels[l];
+        size = sizeAfterConvolution(size,cbn->transitionalKernels[l][0]);
+
+        after_pooling = applyMaxPooling(after_transitional,size,cbn->poolingKernels[l]);
+        freeImagesContinuos(after_transitional,d,size);
+        size = sizeAfterConvolution(size,cbn->poolingKernels[l]);
+
+        for (int i = 0; i < d; i++){
+            name_after[8] = (char)(l / 10 + '0');
+            name_after[9] = (char)((l % 10)+ '0');
+
+            name_after[17] = (char)(i / 10 + '0');
+            name_after[18] = (char)((i % 10) + '0');
+
+            name_after[20] = 'c';
+            //printf("save %s\n",name_after);
+            //saveImage(after_pooling[i],size,name_after,false);
             name_after[20] = 'b';
             printf("save %s\n",name_after);
             saveImage(after_pooling[i],size,name_after,true);

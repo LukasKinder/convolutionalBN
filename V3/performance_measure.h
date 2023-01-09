@@ -32,7 +32,15 @@ int predictNumber(ConvolutionalBayesianNetwork cbn, bool verbose ){
     float * overall_prob_dist = calloc(sizeof(float), 10);
     float * local_prob_dist = malloc(sizeof(float) * 10);
 
+    int n_layer_with_nn = 0;
     for (int i = 0; i < cbn->n_layers; i++){
+
+        if (cbn->bayesianNetworks[i]->n_numberNodes == 0){
+            continue;
+        }
+        n_layer_with_nn++;
+
+
         predictionNumberOneLayer(cbn, i,local_prob_dist);
 
         if (verbose){
@@ -48,7 +56,7 @@ int predictNumber(ConvolutionalBayesianNetwork cbn, bool verbose ){
     }
 
     for (int j = 0; j < 10; j++){
-        overall_prob_dist[j] /= cbn->n_layers;
+        overall_prob_dist[j] /= n_layer_with_nn;
     }
 
     if (verbose){
