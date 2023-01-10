@@ -1,5 +1,5 @@
 
-
+#define N_THREADS 16
 #define NUMBER_NODE_VALUE 10
 
 void initKernels(ConvolutionalBayesianNetwork cbn, int layer, float ***test_images, int n_test_images, bool verbose){
@@ -313,7 +313,6 @@ void calculateGradientNode(float *** gradient, float * bias_gradient, Node n, Ke
                     //printf("%f->%f  ",data_before[d][x][y],data_before[d][x][y] * a);
                     gradient[d][x - responseX][y - responseY] += data_before[d][x][y] * a;
                 }
-                
             }
         }
     }
@@ -369,12 +368,38 @@ void calculateGradient(BayesianNetwork bn, float **** gradient, float * bias_gra
         bias_gradient[i] = 0.0;
     }
 
+    int n_threads = N_THREADS;
+    float ***** gradient_each_thread = malloc(sizeof(float****) * n_threads);
+    float ** bias_each_thread = malloc(sizeof(float*) * n_threads);
+    for (int i = 0; i < n_threads; i++){
+        bias_each_thread[i] = calloc(n_kernels, sizeof(float));
+        gradient_each_thread[i] = initGradient(n_kernels,kernel_depth,kernel_size);
+    }
+
+
+
     float *** example;
+    int this_thread_number;
+    #pragma omp parallel for private(random_index,l,this_thread_number) num_threads(n_threads)
     for (int i = 0; i < batchSize; i++){
-        random_index = rand() % n_data;
+        this_thread_number = omp_get_thread_num();
+        random_index = (rand() % (n_data / n_threads)) * this_thread_number;
         example = data_before[random_index];
         l = number_labels[random_index];
-        calculateGradientImage(gradient,bias_gradient ,bn,kernels, n_kernels,poolingKernel,example,n_data,size_data,l);
+        calculateGradientImage(gradient_each_thread[this_thread_number],bias_each_thread[this_thread_number] ,bn,kernels, n_kernels,poolingKernel,example,n_data,size_data,l);
+    }
+
+    for (int nk = 0; nk < n_threads; nk++){
+        for (int i = 0; i < n_kernels; i++){
+            bias_gradient[i] +=  bias_each_thread[nk][i];
+            for (int d = 0; d < kernel_depth; d++){
+                for (int x  =0; x < kernel_size; x++){
+                    for (int y  =0; y < kernel_size; y++){
+                        gradient[i][d][x][y] += gradient_each_thread[nk][i][d][x][y];
+                    }
+                }
+            }
+        }
     }
 
     
@@ -395,13 +420,6 @@ void calculateGradient(BayesianNetwork bn, float **** gradient, float * bias_gra
             }
         }
     }
-
-    if (extreme_value == 0.0){
-        printf("Error: no existing_values");
-        exit(1);
-    }
-
-    //normalize gradient
     for (int i = 0; i < n_kernels; i++){
         bias_gradient[i] *=  learning_rate / extreme_value;
         for (int d = 0; d < kernel_depth; d++){
@@ -412,13 +430,13 @@ void calculateGradient(BayesianNetwork bn, float **** gradient, float * bias_gra
             }
         }
     }
-    printf("\n");
 
-    printf("a values are:\n");
-    for (int i = 0; i < n_kernels; i++){
-        printf("%f ",bias_gradient[i]);
+    for (int i = 0; i < n_threads; i++){
+        free(bias_each_thread[i]);
+        freeGradient(gradient_each_thread[i],n_kernels,kernel_depth,kernel_size);
     }
-    printf("\n");
+    free(gradient_each_thread);
+    free(bias_each_thread);
 }
 
 void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, int iterations, float learning_rate ,float momentum, int batchSize
@@ -457,8 +475,6 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
 
     for (int it = 0; it< iterations; it++){
 
-        //printNumberNode(bn->numberNodes[0],true);
-
         if (verbose) printf("GRAD_DEC: iteration %d of %d\n",it,iterations);
 
         if (verbose){
@@ -489,47 +505,35 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
             freeLayeredImagesContinuos(test_data,n_test_data,n_kernels,bn->size);
         }
 
-        //if (verbose) printf("GRAD_DEC: transform subset data (subset size = %d)\n", n_data_used_for_counts);
+        if (verbose) printf("GRAD_DEC: transform subset data (subset size = %d)\n", n_data_used_for_counts);
         dataTransitionSubset(data_previous_layer,n_data,d,s,kernels,n_kernels,pooling_kernel,n_data_used_for_counts,subset_data,labels, subset_labels);
 
-        //if (verbose) printf("GRAD_DEC: fit data counts!n\n");
+        if (verbose) printf("GRAD_DEC: fit data counts!n\n");
         fitDataCounts(bn,subset_data,n_data_used_for_counts); 
         for (int j = 0; j < bn->n_numberNodes; j++){
             fitDataCountsNumberNode(bn->numberNodes[j],subset_data,subset_labels, n_data_used_for_counts);
         }
+        
 
-        if (verbose){
-            //printf("GRAD_DEC: fit data counts nn\n");
-        }
-
-        //if (verbose) printf("GRAD_DEC: free subset\n");
+        if (verbose) printf("GRAD_DEC: free subset\n");
         for (int j = 0; j < n_data_used_for_counts; j++){
             freeImagesContinuos(subset_data[j],bn->depth,bn->size);
         }
 
-        //if (verbose) printf("GRAD_DEC: learn gradien\n");
+        if (verbose) printf("GRAD_DEC: learn gradien\n");
         calculateGradient(bn, gradient,bias_gradient,n_kernels,data_previous_layer,n_data,s, labels, kernels,pooling_kernel,learning_rate,batchSize);
 
-        if (it % 10 == 0){
-            //printGradients(gradient,bias_gradient,n_kernels,kernel_depth,kernel_size);
-            //printNumberNode(bn->numberNodes[0],true);
-        }
-
-        //if (verbose) printf("GRAD_DEC: combine running gradient\n");
+        if (verbose) printf("GRAD_DEC: combine running gradient\n");
         additionGradients(previousGradient,gradient,momentum,n_kernels,kernel_depth,kernel_size);
         for (int j = 0; j < n_kernels; j++){
             previous_bias_gradient[j] = momentum * previous_bias_gradient[j] + (1 - momentum) * bias_gradient[j];
         }
 
-        //if (verbose) printf("GRAD_DEC: update kernels\n");
+        if (verbose) printf("GRAD_DEC: update kernels\n");
         updateKernels(kernels,n_kernels,kernel_depth,kernel_size,previousGradient, previous_bias_gradient);
     }
 
-/*  for (int i = 0; i < (bn->n_numberNodes < 10 ? bn->n_numberNodes : 10); i++){
-        printNumberNode(bn->numberNodes[i],true);
-    } */
-
-    //if (verbose) printf("GRAD_DEC: done -> free everything\n");
+    if (verbose) printf("GRAD_DEC: done -> free everything\n");
 
     //printNumberNode(bn->numberNodes[0],true);
 
@@ -542,7 +546,7 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
     freeGradient(previousGradient,n_kernels,kernel_depth,kernel_size);
     free(bias_gradient);
     free(previous_bias_gradient);
-    //if (verbose) printf("GRAD_DEC: exit\n");
+    if (verbose) printf("GRAD_DEC: exit\n");
 }
 
 void kernelTrainingWhileUpdatingStructure(ConvolutionalBayesianNetwork cbn, int layer, int iterations, int iterations_structure_update, float learning_rate 

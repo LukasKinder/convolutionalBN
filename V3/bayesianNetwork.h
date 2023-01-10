@@ -385,14 +385,17 @@ void fitDataCountsOneLevel(BayesianNetwork bn, float **** data, int data_instanc
             }
         }
     }
+    bool *parentCombination;
 
+    #pragma omp parallel private(parentCombination)
+    {
+    parentCombination = malloc(sizeof(bool) * n->n_parents);
     #pragma omp parallel for collapse(2)
     for (x = 0; x < bn->size; x++){
         for (y = 0; y < bn->size; y++){
 
             Node n,parentNode;
             n = bn->nodes[level][x][y];
-            bool *parentCombination = malloc(sizeof(bool) * n->n_parents);
 
             for (int i = 0; i < data_instances; i++){
                 for (int j = 0; j < n->n_parents; j++ ){
@@ -406,8 +409,9 @@ void fitDataCountsOneLevel(BayesianNetwork bn, float **** data, int data_instanc
                     n->stateCountsFalse[ binaryToInt(parentCombination,n->n_parents)]++;
                 }
             }
-            free(parentCombination);
         }
+    }
+    free(parentCombination );
     }
 }
 

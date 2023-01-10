@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <omp.h>
 
 #include "my_mnist.h"
 #include "convolution.h"
@@ -9,9 +10,9 @@
 #include "trainKernels.h"
 #include "performance_measure.h"
 
-#define TRAINING_SIZE 60000
-#define N_NUMBER_NODES 20
-#define N_INCOMING_RELATIONS 5
+#define TRAINING_SIZE 6000
+#define N_NUMBER_NODES 10
+#define N_INCOMING_RELATIONS 3
 
 #define TRAIN_IMAGE_PATH "./data/train-images.idx3-ubyte"
 #define TRAIN_Label_PATH "./data/train-labels.idx1-ubyte"
@@ -19,7 +20,7 @@
 #define TEST_IMAGE_PATH "./data/t10k-images.idx3-ubyte"
 #define TEST_Label_PATH "./data/t10k-labels.idx1-ubyte"
 
-#define KERNEL_SEARCH_ITERATIONS 16
+#define KERNEL_SEARCH_ITERATIONS 1000
 
 void hardcodeKernels(Kernel * kernels){
 
@@ -85,8 +86,8 @@ int main(void){
 
     //layer 1
     addLayerToCbn(cbn,10,2,2,0,2,true);
-    addLayerToCbn(cbn,7,3,2,N_NUMBER_NODES ,5,true);
-    addLayerToCbn(cbn,10,3,2,N_NUMBER_NODES ,8,true);
+    addLayerToCbn(cbn,5,3,2,N_NUMBER_NODES ,5,true);
+    addLayerToCbn(cbn,7,3,2,N_NUMBER_NODES ,8,true);
 
 
     initKernels(cbn,0,images,10,false);
@@ -98,12 +99,8 @@ int main(void){
     saveKernelResponsesOfImageExperimental(cbn, images[0]);
 
     kernelTrainingWhileUpdatingStructure(cbn,0,0,10,6.0,0.5,2000,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,5000,true);
-    kernelTrainingWhileUpdatingStructure(cbn,1,KERNEL_SEARCH_ITERATIONS,8,0.005,0.5,3000,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,3000,true);
-    kernelTrainingWhileUpdatingStructure(cbn,2,KERNEL_SEARCH_ITERATIONS,8,0.005,0.5,3000,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,3000,true);
-
-    /* for (int i = 0; i < cbn->n_kernels[1]; i++){
-        printKernel(cbn->transitionalKernels[1][i]);
-    } */
+    kernelTrainingWhileUpdatingStructure(cbn,1,KERNEL_SEARCH_ITERATIONS,20,0.005,0.5,100,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,500,true);
+    kernelTrainingWhileUpdatingStructure(cbn,2,KERNEL_SEARCH_ITERATIONS,20,0.005,0.5,100,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,500,true);
 
     printNumberNode(cbn->bayesianNetworks[1]->numberNodes[0],true);
     printNumberNode(cbn->bayesianNetworks[2]->numberNodes[0],true);
