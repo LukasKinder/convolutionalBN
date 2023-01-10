@@ -463,6 +463,8 @@ void optimizeStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incomi
 
     }
 
+    if (verbose) printf("OPTIMIZE STRUCTURE: prepare data to right layer\n");
+
     //set data to data of layer
     float ****temp, **** layered_images = imagesToLayeredImagesContinuos(images,n_data,28);
     int d = 1,s = 28;
@@ -475,11 +477,14 @@ void optimizeStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incomi
         d = cbn->bayesianNetworks[l]->depth;
         s = cbn->bayesianNetworks[l]->size;
     }
-
-    learnStructureNumberNodes(n_incoming_relations,layer,bn,layered_images,labels,n_data,number_node_data_per_row,number_node_parent_subset_size,verbose);
+    if (verbose) printf("OPTIMIZE STRUCTURE: learn structure number nodes\n");
+    learnStructureNumberNodes(n_incoming_relations,layer,bn,layered_images,labels,n_data,number_node_data_per_row,number_node_parent_subset_size,false);
+    if (verbose) printf("OPTIMIZE STRUCTURE: learn structure convolutional nodes\n");
     learnStructureConvolutionalNodes(bn,n_incoming_relations,layered_images,n_data,data_per_row_n);
+    if (verbose) printf("OPTIMIZE STRUCTURE: Free images\n");
 
     freeLayeredImagesContinuos(layered_images,n_data,bn->depth,bn->size);
+    if (verbose) printf("OPTIMIZE STRUCTURE: Done\n");
 }
 
 void addRandomStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incoming_relations){

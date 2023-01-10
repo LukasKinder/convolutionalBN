@@ -47,7 +47,81 @@ ConvolutionalBayesianNetwork createConvolutionalBayesianNetwork(int n_layers){
     cbn->transitionalKernels = malloc(sizeof(Kernel * ) * n_layers);
     cbn->poolingKernels = malloc(sizeof(Kernel) * n_layers);
     cbn->n_implemented_layers = 0;
-    
+}
+
+void loadKernels(Kernel *kernels, int n_kernels, char * name){
+    char save_path[255] = "PretrainedKernels/";
+    strncat(save_path,name, strlen(name) );
+
+    int kernel_depth = kernels[0].depth;
+    int kernel_size = kernels[0].size;
+
+    FILE *fptr;
+    fptr = fopen(save_path,"r");
+
+    if(fptr == NULL){
+        printf("Error!");   
+        exit(1);             
+    }
+
+    int file_n_kernels, filer_kernel_depth, file_size_kernels;
+
+    fscanf(fptr,"%d %d %d",&file_n_kernels, &filer_kernel_depth, &file_size_kernels);
+
+
+    if (file_n_kernels != n_kernels || filer_kernel_depth != kernel_depth || file_size_kernels != kernel_size){
+        printf("ERROR!! dimensions of kernel do not fit");
+        exit(1);
+    }
+
+    for (int i = 0; i < n_kernels; i++){
+        fscanf(fptr,"%f\n",&kernels[i].bias);
+        for (int d = 0; d < kernel_depth; d++){
+            for (int x = 0; x < kernel_size; x++){
+                for (int y =0 ; y < kernel_size; y++){
+                    fscanf(fptr, "%f ",&kernels[i].weights[d][x][y]);
+                }
+            }
+        }
+    }
+
+    fclose(fptr);
+}
+
+
+void saveKernels(Kernel *kernels, int n_kernels, char * name){
+    char save_path[255] = "PretrainedKernels/";
+    strncat(save_path,name, strlen(name) );
+
+    printf("save oath is: %s\n",name);
+
+    int kernel_depth = kernels[0].depth;
+    int kernel_size = kernels[0].size;
+
+    FILE *fptr;
+    fptr = fopen(save_path,"w");
+
+    if(fptr == NULL){
+        printf("Error!");   
+        exit(1);             
+    }
+
+    fprintf(fptr,"%d %d %d\n",n_kernels,kernel_depth,kernel_size);
+    for (int i = 0; i < n_kernels; i++){
+        fprintf(fptr,"%f\n",kernels[i].bias);
+        for (int d = 0; d < kernel_depth; d++){
+            for (int x = 0; x < kernel_size; x++){
+                for (int y =0 ; y < kernel_size; y++){
+                    fprintf(fptr, "%f ",kernels[i].weights[d][x][y]);
+                }
+                fprintf(fptr, "\n");
+            }
+            fprintf(fptr, "\n");
+        }
+        fprintf(fptr, "\n");
+    }
+
+    fclose(fptr);
 }
 
 //Todo enable stride and padding

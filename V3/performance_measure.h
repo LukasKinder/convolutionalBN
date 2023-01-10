@@ -21,14 +21,10 @@ void predictionNumberOneLayer(ConvolutionalBayesianNetwork cbn, int layer,  floa
             prob_dist[j] +=  nn->CPT[binaryToInt(parent_states,nn->n_parents)][j];
         }
     }
-    for (int j = 0; j < 10; j++){
-        prob_dist[j] /= bn->n_numberNodes;
-    }
     free(parent_states);
 }
 
-
-int predictNumber(ConvolutionalBayesianNetwork cbn, bool verbose ){
+void predictNumber(ConvolutionalBayesianNetwork cbn, int *prediction1, int * prediction2, bool verbose ){
     float * overall_prob_dist = calloc(sizeof(float), 10);
     float * local_prob_dist = malloc(sizeof(float) * 10);
 
@@ -55,8 +51,13 @@ int predictNumber(ConvolutionalBayesianNetwork cbn, bool verbose ){
         }
     }
 
+    int n_number_nodes = 0;
+    for (int i = 0; i < cbn->n_layers; i++){
+        n_number_nodes += cbn->bayesianNetworks[i]->n_numberNodes;
+    }
+
     for (int j = 0; j < 10; j++){
-        overall_prob_dist[j] /= n_layer_with_nn;
+        overall_prob_dist[j] /= (float)(n_number_nodes);
     }
 
     if (verbose){
@@ -68,21 +69,26 @@ int predictNumber(ConvolutionalBayesianNetwork cbn, bool verbose ){
     }
 
     float best_prob = -1;
-    int best;
     for (int j = 0; j < 10; j++){
         if (overall_prob_dist[j] > best_prob){
             best_prob = overall_prob_dist[j];
-            best = j;
+            *prediction1 = j;
         }
     }
 
+    best_prob = -1;
+    for (int j = 0; j < 10; j++){
+        if (overall_prob_dist[j] > best_prob && j != *prediction1){
+            best_prob = overall_prob_dist[j];
+            *prediction2 = j;
+        }
+    }
 
     free(overall_prob_dist);
     free(local_prob_dist);
-    return best;
 }
 
-void predictNumberManualExperiment(ConvolutionalBayesianNetwork cbn, float *** images, int n_images, int * labels){
+/* void predictNumberManualExperiment(ConvolutionalBayesianNetwork cbn, float *** images, int n_images, int * labels){
 
     int random_image, X;
 
@@ -97,7 +103,7 @@ void predictNumberManualExperiment(ConvolutionalBayesianNetwork cbn, float *** i
         printf("is %d, predicts %d\n", labels[random_image], predictNumber(cbn,true));
 
     }
-}
+} */
 
 float predictNumberAccuracy(ConvolutionalBayesianNetwork cbn, char* image_path, char * label_path, int n_data, bool verbose){
 
@@ -108,17 +114,25 @@ float predictNumberAccuracy(ConvolutionalBayesianNetwork cbn, char* image_path, 
     if (verbose) printf("Done\n");
 
     float accuracy = 0;
+    float lenient_accuracy = 0;
+    int guess1, guess2;
     for (int i = 0; i < n_data; i++){
         if (verbose && i % 50 ==0) printf("reading image %d \t of %d\r",i, n_data);
         setStateToImage(cbn, images[i]);
-        if (predictNumber(cbn,false) == labels[i] ){
+        predictNumber(cbn,&guess1, &guess2,false);
+        if (guess1== labels[i] ){
             accuracy +=1;
+        }
+        if (guess1 == labels[i] || guess2 == labels[i]){
+            lenient_accuracy +=1;
         }
     }
     if (verbose) printf("\nDone\n ");
 
     freeImagesContinuos(images,n_data,28);
     free(labels);
+
+    printf("in best 2: %f\n", lenient_accuracy / n_data);
 
     return accuracy / n_data;
 }

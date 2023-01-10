@@ -534,9 +534,6 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
     }
 
     if (verbose) printf("GRAD_DEC: done -> free everything\n");
-
-    //printNumberNode(bn->numberNodes[0],true);
-
     freeLayeredImagesContinuos(data_previous_layer,n_data,d,s);
     d = bn->depth;
     s = bn->size;
@@ -560,20 +557,16 @@ void kernelTrainingWhileUpdatingStructure(ConvolutionalBayesianNetwork cbn, int 
     if (iterations_structure_update < iterations){
         for (int i  = 0; i < iterations / iterations_structure_update; i++){
 
-            if (verbose) printf("Iteration %d of %d: REvise structure structure\n",i, iterations / iterations_structure_update);
+            if (verbose) printf("Iteration %d of %d: REvise structure structure\n",i +1, iterations / iterations_structure_update);
             //addRandomStructure(cbn,layer,4);
             optimizeStructure(cbn,layer,n_incoming_relations,images,labels,n_data,100,0.01,30,false);
 
             if(verbose) printf("gradient descent for %d iterations\n", iterations_structure_update);
             trainKernelsGradientDescent(cbn,layer,iterations_structure_update,learning_rate,momentum,batchSize,images,labels,n_data,n_data_used_for_counts,true);
         }
-        if (verbose) printf("Optimize structure a final time\n");
-        optimizeStructure(cbn,layer,n_incoming_relations,images,labels,n_data,100,0.03,30,false); 
     }else{
-        //optimizeStructure(cbn,layer,n_incoming_relations,images,labels,n_data,100,0.03,0,false); 
-        addRandomStructure(cbn,layer,n_incoming_relations);
+        optimizeStructure(cbn,layer,n_incoming_relations,images,labels,n_data,100,0.03,0,false); 
         trainKernelsGradientDescent(cbn,layer,iterations,learning_rate,momentum,batchSize,images,labels,n_data,n_data_used_for_counts,true);
-        optimizeStructure(cbn,layer,n_incoming_relations,images,labels,n_data,100,0.03,30,false); 
     }
     if (verbose) printf("Done kernel training while updating stucture\n");
 }
