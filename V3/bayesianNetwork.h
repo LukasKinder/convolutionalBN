@@ -48,6 +48,11 @@ typedef struct RawBayesianNetwork {
 
     NumberNode * numberNodes;
     int n_numberNodes;
+
+    float* learning_curve;
+    float * learning_proportion_white;
+    int learning_curve_size;
+    int learning_curve_len;
 }RawBayesianNetwork;
 
 Node initNode(int depth, int x, int y){
@@ -106,6 +111,11 @@ BayesianNetwork createBayesianNetwork(int size, int depth, int n_number_nodes, i
     for (int i = 0; i < n_number_nodes; i++){
         bn->numberNodes[i] = initNumberNode();
     }
+
+    bn->learning_curve = malloc(sizeof(float) * 1);
+    bn->learning_proportion_white = malloc(sizeof(float) * 1);
+    bn->learning_curve_size = 0;
+    bn->learning_curve_len = 1;
     return bn;
 }
 
@@ -145,6 +155,11 @@ void freeNumberNode(NumberNode nn){
 
 void freeBayesianNetwork(BayesianNetwork bn){
     int i,j,k;
+    if (bn->learning_curve_size != 0){
+        free(bn->learning_curve);
+        free(bn->learning_proportion_white);
+    }
+
     for (i = 0; i < bn->depth; i++){
         for (j = 0; j < bn->size; j++){
             for (k = 0; k < bn->size; k++){
@@ -162,6 +177,26 @@ void freeBayesianNetwork(BayesianNetwork bn){
         free(bn->numberNodes);
     }
     free(bn);
+}
+
+void saveLearningCurve(BayesianNetwork bn, char *name){
+    char save_path[255] = "LearningCurves/";
+    strncat(save_path,name, strlen(name) );
+
+    printf("save path is: %s\n",name);
+    FILE *fptr;
+    fptr = fopen(save_path,"w");
+
+    if(fptr == NULL){
+        printf("Error!");   
+        exit(1);             
+    }
+
+    for (int i = 0; i < bn->learning_curve_size; i++){
+        fprintf(fptr,"%f %f\n", bn->learning_curve[i], bn->learning_proportion_white[i]);
+    }
+
+    fclose(fptr);
 }
 
 int binaryToInt(bool* binaryNumber, int size){
@@ -771,6 +806,70 @@ float logLikelihoodDataGivenModelNoRelations(BayesianNetwork bn){
     }
 
     return logProb;
+}
+
+float  average_probability_nodes(BayesianNetwork bn){
+
+    int i,j,k,l;
+    float prob = 0;
+    Node n;
+    int n_data = 0;
+
+    for ( i = 0; i < bn->depth; i++){
+        for ( j = 0; j < bn->size; j++){
+            for ( k = 0; k < bn->size; k++){
+                n = bn->nodes[i][j][k];
+                if (n->stateCountsTrue == NULL){
+                    printf("ERROR: state counts do not seem to be learned");
+                    exit(1);
+                }
+                for (l = 0; l < (int)(pow(2,n->n_parents));l++ ){
+
+                    if (n->stateCountsTrue[l]> 0){
+                        prob +=  (float)(n->stateCountsTrue[l]) * (float)(n->stateCountsTrue[l]) / (n->stateCountsTrue[l] + n->stateCountsFalse[l]);
+                    }
+                    if (n->stateCountsFalse[l]> 0){
+                        prob +=  (float)(n->stateCountsFalse[l]) * (float)(n->stateCountsFalse[l]) / (n->stateCountsTrue[l] + n->stateCountsFalse[l]);
+                    }
+                    n_data += n->stateCountsTrue[l] + n->stateCountsFalse[l];
+                }
+            }
+        }
+    }
+    printf("1: n_data = %d\n", n_data);
+    return prob / (float)(n_data);
+}
+
+
+
+float average_probability_nodes_no_relations(BayesianNetwork bn){
+    int i,j,k,l, n_true, n_false;
+    float prob = 0;
+    Node n;
+    int n_data = 0;
+
+    for ( i = 0; i < bn->depth; i++){
+        for ( j = 0; j < bn->size; j++){
+            for ( k = 0; k < bn->size; k++){
+                n = bn->nodes[i][j][k];
+                n_true = 0;
+                n_false = 0;
+                for (l = 0; l < (int)(pow(2,n->n_parents));l++ ){
+                    n_true += n->stateCountsTrue[l];
+                    n_false += n->stateCountsFalse[l];
+                }
+                if (n_true > 0){
+                    prob +=  (float)(n_true) * (float)(n_true) / (n_true + n_false );
+                }
+                if (n_false > 0){
+                    prob +=  (float)(n_false) * (float)(n_false ) / (n_true + n_false );
+                }
+                n_data += n_true + n_false;
+            }
+        }
+    }
+    printf("2: n_data = %d\n", n_data);
+    return prob / (float)(n_data);
 }
 
 int numberParametersOneLevel(BayesianNetwork bn,int level){

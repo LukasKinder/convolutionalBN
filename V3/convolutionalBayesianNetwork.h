@@ -285,11 +285,14 @@ void setToRandomState(ConvolutionalBayesianNetwork cbn){
 
 
 
-void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image){
-    char name[30] = "ex_original_image";
-    int d = 1, size = 28;
-    saveImage(image,size,name,false);
+void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image ,char * suffix){
 
+    saveImage(image,28,"kernel_responses/ex_original_image",false);
+
+    char name[255] = "kernel_responses/response_layerXX_KernelXX_";
+    strncat(name,suffix, strlen(suffix));
+
+    int d = 1, size = 28;
     float *** before = malloc(sizeof(float **) * 1);
     before[0] = malloc(sizeof(float*) * size);
     for (int i  =0; i < 28; i++){
@@ -302,8 +305,6 @@ void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image
     
     float *** after_transitional;
     float *** after_pooling;
-                        // 012345678901234567890
-    char name_after[30] = "ex_layerXX_kernelXX_b";
     for (int l = 0; l < cbn->n_layers; l++){
         after_transitional = malloc(sizeof(float **) * cbn->n_kernels[l]);
         for (int i = 0; i < cbn->n_kernels[l] ; i++){
@@ -318,18 +319,14 @@ void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image
         size = sizeAfterConvolution(size,cbn->poolingKernels[l]);
 
         for (int i = 0; i < d; i++){
-            name_after[8] = (char)(l / 10 + '0');
-            name_after[9] = (char)((l % 10)+ '0');
+            name[31] = (char)(l / 10 + '0');
+            name[32] = (char)((l % 10)+ '0');
 
-            name_after[17] = (char)(i / 10 + '0');
-            name_after[18] = (char)((i % 10) + '0');
+            name[40] = (char)(i / 10 + '0');
+            name[41] = (char)((i % 10) + '0');
 
-            name_after[20] = 'c';
-            //printf("save %s\n",name_after);
-            //saveImage(after_pooling[i],size,name_after,false);
-            name_after[20] = 'b';
-            printf("save %s\n",name_after);
-            saveImage(after_pooling[i],size,name_after,true);
+            printf("save %s\n",name);
+            saveImage(after_pooling[i],size,name,true);
         }
 
         before = after_pooling;

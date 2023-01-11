@@ -1,6 +1,8 @@
 
 #define N_THREADS 16
 #define NUMBER_NODE_VALUE 10
+#define N_TEST_PROPORTION_WHITE 30
+#define MAX_CHANGE_WHITE_ITERATION 0.005
 
 void initKernels(ConvolutionalBayesianNetwork cbn, int layer, float ***test_images, int n_test_images, bool verbose){
 
@@ -261,7 +263,7 @@ void calculateGradientNode(float *** gradient, float * bias_gradient, Node n, Ke
     } 
      
 
-    prob_if_true = prob_n_given_data(n,data_after);
+    //prob_if_true = prob_n_given_data(n,data_after);
     a += prob_if_true - (1 - prob_if_true); 
 
     a /= (1 + n->n_children + n->n_numberNodeChildren * NUMBER_NODE_VALUE);
@@ -439,6 +441,95 @@ void calculateGradient(BayesianNetwork bn, float **** gradient, float * bias_gra
     free(bias_each_thread);
 }
 
+void update_proportion_white(float * proportion_white_kernels, Kernel * kernels, int n_kernels, float **** data_previous_layer, int n_data, int d , int s ){
+    n_data = N_TEST_PROPORTION_WHITE < n_data ? N_TEST_PROPORTION_WHITE : n_data;
+
+    int size_after = sizeAfterConvolution(s,kernels[0]);
+
+    #pragma omp parallel for
+    for (int i = 0; i < n_kernels; i++){
+        proportion_white_kernels[i] = 0.0;
+
+        #pragma omp parallel for
+        for (int j = 0; j < n_data; j++){
+            float ** data_after;
+            data_after = applyConvolutionWeighted(data_previous_layer[j],s,s,kernels[i],true);
+            for (int x = 0;  x < size_after; x++){
+                for (int y = 0; y < size_after; y++){
+                    proportion_white_kernels[i] += 0.5 < data_after[x][y] ? 1.0 : 0.0;
+                }
+            }
+            freeImageContinuos(data_after,size_after);
+        }
+        proportion_white_kernels[i] /= n_data * size_after * size_after;
+    }
+
+}
+
+void moderateBiases(float * proportion_white_kernels, Kernel * kernels, int n_kernels, float **** data_previous_layer, int n_data, int d ,int s ){
+
+    int size_after = sizeAfterConvolution(s,kernels[0]);
+
+    float * new_proportion_white = malloc(sizeof(float) * n_kernels);
+    update_proportion_white(new_proportion_white,kernels,n_kernels,data_previous_layer, n_data, d, s);
+    bool * should_increase = malloc(sizeof(bool) * n_kernels);
+    for (int i = 0; i < n_kernels; i++){
+        should_increase[i] = proportion_white_kernels[i] < new_proportion_white[i] ? true : false;
+    }
+
+    //1, 0.5, 0.25, 0.125 ...
+    float change = 1.0;
+    bool update;
+    for (int iteration = 0; iteration < 20; iteration++){
+        update = false;
+
+        if (iteration != 0){
+            update_proportion_white(new_proportion_white,kernels,n_kernels,data_previous_layer, n_data, d, s);
+        }
+
+        for (int i = 0; i < n_kernels; i++){
+            
+            if (should_increase[i]){
+                //should increase...
+                if (new_proportion_white[i] < proportion_white_kernels[i]){
+                    //... but does not. Increase bias!
+                    kernels[i].bias += change;
+                    update = true;
+                } else if ( proportion_white_kernels[i] + MAX_CHANGE_WHITE_ITERATION < new_proportion_white[i]){
+                    //.. but not that much. Decrease bias!
+                    kernels[i].bias -= change;
+                    update = true;
+                } else {
+                    //.. and does not too much. No change required
+                }
+            }else{
+                //should decrease...
+                if (proportion_white_kernels[i] < new_proportion_white[i]){
+                    // ... but does not. Decrease bias
+                    kernels[i].bias -= change;
+                    update = true;
+                } else if (  new_proportion_white[i] + MAX_CHANGE_WHITE_ITERATION < proportion_white_kernels[i]){
+                    //... but not that much. Increase bias!
+                    kernels[i].bias += change;
+                    update = true;
+                } else {
+                    //.. and does not too much. No change required
+                }
+            }
+        }
+        if (! update){
+            printf("stop after iteration %d, (after change = %f)\n", iteration, change * 2);
+            break;
+        }
+
+        change /=2;
+    }
+
+    free(new_proportion_white);
+    free(should_increase);
+}
+
+
 void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, int iterations, float learning_rate ,float momentum, int batchSize
     , float *** images, int * labels, int n_data, int n_data_used_for_counts, bool verbose){
 
@@ -459,6 +550,9 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
 
     float ****temp, **** data_previous_layer = imagesToLayeredImagesContinuos(images,n_data,28);
     float **** subset_data = malloc(sizeof(float ***) * n_data_used_for_counts);
+
+    float * proportion_white_kernels = malloc(sizeof(float) * n_kernels);
+
     int * subset_labels = malloc(sizeof(int) * n_data_used_for_counts);
     int d = 1,s = 28;
     for (int l = 0; l < layer; l++){
@@ -478,14 +572,15 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
         if (verbose) printf("GRAD_DEC: iteration %d of %d\n",it,iterations);
 
         if (verbose){
-            int n_test_data = 1000 < n_data ? 1000 : n_data;
+            int n_test_data = 500 < n_data ? 500 : n_data;
             float **** test_data = dataTransition(data_previous_layer,n_test_data,d,s,kernels,n_kernels,pooling_kernel);
 
             fitDataCounts(bn,test_data,n_test_data); 
             for (int i = 0; i < bn->n_numberNodes; i++){
                 fitDataCountsNumberNode(bn->numberNodes[i],test_data,labels, n_test_data);
             }
-            float logLNumberNodes = 0;
+
+            /*  float logLNumberNodes = 0;
             for (int i = 0; i < bn->n_numberNodes; i++){
                 logLNumberNodes += logMaxLikelihoodDataNumberNode(bn->numberNodes[i]);
             }
@@ -500,7 +595,23 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
             float log_prob_data_relations = logMaxLikelihoodDataGivenModel(bn,NULL,0, false);
             float log_prob_data_no_relations = logLikelihoodDataGivenModelNoRelations(bn);
 
-            printf("log probability n with - without relations %f \n", log_prob_data_relations - log_prob_data_no_relations);
+            printf("log probability n with - without relations %f \n", log_prob_data_relations - log_prob_data_no_relations);  */
+
+            float average_prob_with_relations = average_probability_nodes(bn);
+            float average_prob_no_relations = average_probability_nodes_no_relations(bn);
+
+            printf("Average prob no relations %f, average prob with relations %f difference: %f\n", average_prob_no_relations, average_prob_with_relations
+                    , average_prob_with_relations - average_prob_no_relations);
+
+            if (bn->learning_curve_len == bn->learning_curve_size){
+                bn->learning_curve_len *=2;
+                bn->learning_curve = realloc(bn->learning_curve, sizeof(float) * bn->learning_curve_len);
+                bn->learning_proportion_white = realloc(bn->learning_proportion_white, sizeof(float) * bn->learning_curve_len);
+            }
+            bn->learning_curve[bn->learning_curve_size] = average_prob_with_relations - average_prob_no_relations;
+            
+            bn->learning_proportion_white[bn->learning_curve_size] = proportionWhite(test_data,n_test_data,n_kernels,bn->size);
+            bn->learning_curve_size +=1;
 
             freeLayeredImagesContinuos(test_data,n_test_data,n_kernels,bn->size);
         }
@@ -529,8 +640,13 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
             previous_bias_gradient[j] = momentum * previous_bias_gradient[j] + (1 - momentum) * bias_gradient[j];
         }
 
+        update_proportion_white(proportion_white_kernels, kernels, n_kernels, data_previous_layer, n_data, d , s );
+
         if (verbose) printf("GRAD_DEC: update kernels\n");
         updateKernels(kernels,n_kernels,kernel_depth,kernel_size,previousGradient, previous_bias_gradient);
+
+        //adapts biases if change in white too large
+        moderateBiases(proportion_white_kernels,kernels, n_kernels, data_previous_layer, n_data, d , s );
     }
 
     if (verbose) printf("GRAD_DEC: done -> free everything\n");
@@ -543,6 +659,7 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
     freeGradient(previousGradient,n_kernels,kernel_depth,kernel_size);
     free(bias_gradient);
     free(previous_bias_gradient);
+    free(proportion_white_kernels);
     if (verbose) printf("GRAD_DEC: exit\n");
 }
 

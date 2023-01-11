@@ -11,9 +11,9 @@
 #include "trainKernels.h"
 #include "performance_measure.h"
 
-#define TRAINING_SIZE 60000
-#define N_NUMBER_NODES 50
-#define N_INCOMING_RELATIONS 12
+#define TRAINING_SIZE 6000
+#define N_NUMBER_NODES 10
+#define N_INCOMING_RELATIONS 5
 
 #define TRAIN_IMAGE_PATH "./data/train-images.idx3-ubyte"
 #define TRAIN_Label_PATH "./data/train-labels.idx1-ubyte"
@@ -21,7 +21,7 @@
 #define TEST_IMAGE_PATH "./data/t10k-images.idx3-ubyte"
 #define TEST_Label_PATH "./data/t10k-labels.idx1-ubyte"
 
-#define KERNEL_SEARCH_ITERATIONS 10
+#define KERNEL_SEARCH_ITERATIONS 200
 
 int main(void){
 
@@ -36,13 +36,26 @@ int main(void){
     addLayerToCbn(cbn,10,2,2, N_NUMBER_NODES ,2,true);
     addLayerToCbn(cbn,10,3,2, N_NUMBER_NODES,5,true);
 
-    loadKernels(cbn->transitionalKernels[0], cbn->n_kernels[0],"hardcoded_layer1_n10_d1_s2");
-    loadKernels(cbn->transitionalKernels[1], cbn->n_kernels[1],"layer2_n10_d10_s3");
+    loadKernels(cbn->transitionalKernels[0], cbn->n_kernels[0],"layer1_n10_d1_s2");
+    //loadKernels(cbn->transitionalKernels[1], cbn->n_kernels[1],"layer2_n10_d10_s3");
+    initKernels(cbn,1,images,20,false);
+    //loadKernels(cbn->transitionalKernels[1], cbn->n_kernels[2],"layer3_n10_d10_s3");
 
-    //saveKernelResponsesOfImageExperimental(cbn, images[0]);
+    saveKernelResponsesOfImage(cbn, images[0], "before");
 
-    //kernelTrainingWhileUpdatingStructure(cbn,1,KERNEL_SEARCH_ITERATIONS,10,0.005,0.5,100,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,2000,true);
-    //saveKernels(cbn->transitionalKernels[1],10,"layer2_n10_d10_s3");
+    kernelTrainingWhileUpdatingStructure(cbn,1,KERNEL_SEARCH_ITERATIONS,10,0.05,0.5,200,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,100,true);
+    saveLearningCurve(cbn->bayesianNetworks[1], "firstExperiment");
+
+    saveKernelResponsesOfImage(cbn, images[0], "after");
+
+    //saveKernels(cbn->transitionalKernels[1],10,"layer3_n10_d10_s3");
+
+
+    free(labels);
+    freeImagesContinuos(images,TRAINING_SIZE,28);
+    freeConvolutionalBayesianNetwork(cbn);
+
+    return 0;
 
     printf("optimize structure layer 0\n");
     optimizeStructure(cbn,0,N_INCOMING_RELATIONS,images,labels,TRAINING_SIZE,10,0.005,0,false); 

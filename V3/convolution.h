@@ -288,3 +288,33 @@ Kernel createPromisingKernel(int size, int depth, int stride, bool padding, floa
     }
     return k;
 }
+
+float proportionWhite(float **** data, int n_data, int depth, int size){
+    float proportion = 0.0;
+    for (int i = 0; i< n_data; i++){
+        for (int d = 0; d < depth; d++){
+            for (int x = 0; x < size; x++){
+                for (int y  = 0; y < size; y++){
+                    if (0.5 < data[i][d][x][y]){
+                        proportion +=1;
+                    }
+                }
+            }
+        }
+    }
+    return proportion / (n_data * depth * size * size);
+}
+
+float proportionWhiteLayer(float **** data, int n_data, int layer, int size){
+    float proportion = 0.0;
+    for (int i = 0; i< n_data; i++){
+        for (int x = 0; x < size; x++){
+            for (int y  = 0; y < size; y++){
+                if (0.5 < data[i][layer][x][y]){
+                    proportion +=1;
+                }
+            }
+        }
+    }
+    return proportion / (n_data * size * size);
+}
