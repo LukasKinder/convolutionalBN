@@ -136,3 +136,66 @@ float predictNumberAccuracy(ConvolutionalBayesianNetwork cbn, char* image_path, 
 
     return accuracy / n_data;
 }
+
+
+void rotateImageClockwise(float ** original, float ** target){
+    for (int i = 0; i < 28; i++){
+        for (int j = 0; j < 28; j++){
+            target[j][27-i] = original[i][j];
+        }
+    }
+}
+
+bool canFindBestRotation(ConvolutionalBayesianNetwork cbn, float ** image, bool verbose){
+
+    float ** temp;
+    float ** copy = malloc(sizeof(float*) * 28);
+    for (int i = 0; i < 28; i++){
+        copy[i] = malloc(sizeof(float) * 28);
+    }
+
+    
+    int best;
+    float this, best_prob = 0.0;
+    for (int i = 0; i < 4;i++){
+        setStateToImage(cbn,image);
+        this = average_probability_nodes(cbn->bayesianNetworks[0]);
+        if (verbose) printf("rotation %d, prob = %f\n",i,this);
+
+        if (this >= best_prob){
+            best = i;
+            best_prob = this;
+        }
+        rotateImageClockwise(image,copy);
+        temp = image;
+        image = copy;
+        copy = temp;
+    }
+
+    freeImageContinuos(copy,28);
+    return best == 0;
+}
+    
+
+float rotatingImageAccuracy(ConvolutionalBayesianNetwork cbn, char* image_path, int n_data, bool verbose){
+
+    if (verbose) printf("reading test data for rotating accuracy\n");
+    float *** images = readImagesContinuos(image_path,n_data);
+
+    if (verbose) printf("Done\n");
+
+    float accuracy = 0;
+    for (int i = 0; i < n_data; i++){
+        if (verbose && i % 50 ==0) printf("reading image %d \t of %d\r",i, n_data);
+
+        if (canFindBestRotation(cbn,images[i],false)){
+            accuracy += 1.0;
+        }
+    }
+    accuracy /= (float)(n_data);
+    if (verbose) printf("\nDone\n ");
+
+    freeImagesContinuos(images,n_data,28);
+
+    return accuracy;
+}

@@ -70,7 +70,10 @@ void loadKernels(Kernel *kernels, int n_kernels, char * name){
 
 
     if (file_n_kernels != n_kernels || filer_kernel_depth != kernel_depth || file_size_kernels != kernel_size){
-        printf("ERROR!! dimensions of kernel do not fit");
+
+        printf("ERROR!! dimensions of kernel do not fit\n");
+        printf("File: n %d depth %d size%d\n", file_n_kernels,filer_kernel_depth,file_size_kernels);
+        printf("Template: n %d depth %d size%d\n", n_kernels,kernel_depth,kernel_size);
         exit(1);
     }
 

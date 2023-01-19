@@ -119,6 +119,37 @@ BayesianNetwork createBayesianNetwork(int size, int depth, int n_number_nodes, i
     return bn;
 }
 
+// copy+ies a bayesian networks (only size and structure, not counts, not_number_nodes)
+BayesianNetwork copyBayesianNetwork(BayesianNetwork original){
+    BayesianNetwork copy = createBayesianNetwork(original->size,original->depth,0,original->distanceRelation,original->diagonals);
+
+    Node n_original, n_copy, original_relative;
+    for (int d = 0; d < original->depth; d++){
+        for (int x = 0; x < original->size; x++){
+            for (int y  =0; y < original->size; y++){
+                n_original = original->nodes[d][x][y];
+                n_copy = copy->nodes[d][x][y];
+
+                n_copy->n_children = n_original->n_children;
+                n_copy->children = malloc(sizeof(Node) * n_copy->n_children );
+                for (int i = 0; i < n_copy->n_children; i++){
+                    original_relative = n_original->children[i];
+                    n_copy->children[i] = copy->nodes[original_relative->depth][original_relative->x][original_relative->y];
+                }
+
+                n_copy->n_parents = n_original->n_parents ;
+                n_copy->parents = malloc(sizeof(Node) * n_copy->n_parents);
+                for (int i = 0; i < n_copy->n_parents; i++){
+                    original_relative = n_original->parents[i];
+                    n_copy->parents[i] = copy->nodes[original_relative->depth][original_relative->x][original_relative->y];
+                }
+
+            }
+        }
+    }
+    return copy;
+}
+
 void freeNode(Node n){
 
     if (n->parents != NULL) free(n->parents);
@@ -155,10 +186,9 @@ void freeNumberNode(NumberNode nn){
 
 void freeBayesianNetwork(BayesianNetwork bn){
     int i,j,k;
-    if (bn->learning_curve_size != 0){
-        free(bn->learning_curve);
-        free(bn->learning_proportion_white);
-    }
+    free(bn->learning_curve);
+    free(bn->learning_proportion_white);
+    
 
     for (i = 0; i < bn->depth; i++){
         for (j = 0; j < bn->size; j++){
@@ -808,13 +838,11 @@ float logLikelihoodDataGivenModelNoRelations(BayesianNetwork bn){
     return logProb;
 }
 
-float  average_probability_nodes(BayesianNetwork bn){
-
+float average_max_probability_nodes(BayesianNetwork bn){
     int i,j,k,l;
     float prob = 0;
     Node n;
     int n_data = 0;
-
     for ( i = 0; i < bn->depth; i++){
         for ( j = 0; j < bn->size; j++){
             for ( k = 0; k < bn->size; k++){
@@ -836,9 +864,29 @@ float  average_probability_nodes(BayesianNetwork bn){
             }
         }
     }
-    printf("1: n_data = %d\n", n_data);
     return prob / (float)(n_data);
 }
+
+float average_probability_nodes(BayesianNetwork bn){
+    int i,j,k,l;
+    float prob = 0;
+    Node n;
+    for ( i = 0; i < bn->depth; i++){
+        for ( j = 0; j < bn->size; j++){
+            for ( k = 0; k < bn->size; k++){
+                n = bn->nodes[i][j][k];
+                if (n->CPT == NULL){
+                    printf("ERROR: CPTs do not seem to be learned");
+                    exit(1);
+                }
+                prob += probabilityGivenParents(n);
+            }
+        }
+    }
+    return prob / (float)(bn->depth * bn->size * bn->size);
+}
+
+
 
 
 
@@ -868,7 +916,6 @@ float average_probability_nodes_no_relations(BayesianNetwork bn){
             }
         }
     }
-    printf("2: n_data = %d\n", n_data);
     return prob / (float)(n_data);
 }
 
