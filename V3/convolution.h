@@ -59,6 +59,21 @@ Kernel createKernel(int size,int depth, KernelType type, int stride, bool paddin
     return kernel;
 }
 
+Kernel copyKernel(Kernel k){
+    Kernel copy = createKernel(k.size,k.depth,k.type,k.stride,k.padding);
+    if (k.type ==  weighted){
+        for (int i = 0; i < k.depth; i++){
+            for (int j = 0; j < k.size; j ++){
+                for (int l = 0; l < k.size; l ++){
+                    copy.weights[i][j][l] = k.weights[i][j][l]; 
+                }
+            }
+        }
+        copy.bias = k.bias;
+    }
+    return copy;
+}
+
 void printKernel(Kernel kernel){
     if (kernel.type == pooling){
         printf("Pooling kernel with size %d\n",kernel.size);

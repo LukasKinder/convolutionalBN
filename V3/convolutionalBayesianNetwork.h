@@ -49,6 +49,21 @@ ConvolutionalBayesianNetwork createConvolutionalBayesianNetwork(int n_layers){
     cbn->n_implemented_layers = 0;
 }
 
+ConvolutionalBayesianNetwork copyConvolutionalBayesianNetwork(ConvolutionalBayesianNetwork cbn){
+    ConvolutionalBayesianNetwork copy = createConvolutionalBayesianNetwork(cbn->n_layers);
+    for (int i = 0; i < cbn->n_layers; i++){
+        copy->bayesianNetworks[i] = copyBayesianNetwork(cbn->bayesianNetworks[i],true);
+        copy->poolingKernels[i] = copyKernel(cbn->poolingKernels[i]);
+        copy->n_kernels[i] = cbn->n_kernels[i];
+        copy->transitionalKernels[i] = malloc(sizeof(Kernel) * copy->n_kernels[i]);
+        for(int j = 0; j < copy->n_kernels[i]; j++){
+            copy->transitionalKernels[i][j] = copyKernel(cbn->transitionalKernels[i][j]);
+        }
+    }
+    copy->n_implemented_layers = cbn->n_implemented_layers;
+    return copy;
+}
+
 void loadKernels(Kernel *kernels, int n_kernels, char * name){
     char save_path[255] = "PretrainedKernels/";
     strncat(save_path,name, strlen(name) );
@@ -69,12 +84,16 @@ void loadKernels(Kernel *kernels, int n_kernels, char * name){
     fscanf(fptr,"%d %d %d",&file_n_kernels, &filer_kernel_depth, &file_size_kernels);
 
 
-    if (file_n_kernels != n_kernels || filer_kernel_depth != kernel_depth || file_size_kernels != kernel_size){
+    if (file_n_kernels < n_kernels ||filer_kernel_depth != kernel_depth || file_size_kernels != kernel_size){
 
         printf("ERROR!! dimensions of kernel do not fit\n");
         printf("File: n %d depth %d size%d\n", file_n_kernels,filer_kernel_depth,file_size_kernels);
         printf("Template: n %d depth %d size%d\n", n_kernels,kernel_depth,kernel_size);
         exit(1);
+    }
+
+    if (file_n_kernels > n_kernels ){
+        printf("WARNING: only a fraction of the loaded kernels are used\n");
     }
 
     for (int i = 0; i < n_kernels; i++){
@@ -148,7 +167,9 @@ void addLayerToCbn(ConvolutionalBayesianNetwork cbn, int n_kernels, int kernel_s
 }
 
 
-void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char * pathImages, char * pathLabels , int n_data, int shifts, float pseudocounts){
+void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char * pathImages, char * pathLabels , int n_data, int shifts, float pseudocounts, bool verbose){
+
+    if (verbose) printf("TUNE CPTS: init\n");
 
     BayesianNetwork bn;
     int n_parent_combinations;
@@ -173,6 +194,7 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
             }
         }
     }
+
     for (int d = 0; d < bn->depth; d++){
         for(int x  =0; x < bn->size; x++){
             for (int y  =0; y < bn->size; y++){
@@ -187,13 +209,13 @@ void tuneCPTwithAugmentedData(ConvolutionalBayesianNetwork cbn, int layer , char
             }
         }
     }
-    
     int * labels = readLabels(pathLabels, n_data);
     float *** images = readImagesContinuos(pathImages,n_data);
+    if (verbose) printf("TUNE CPTS: init done\n");
     for(int shift_right = -shifts; shift_right < shifts +1;shift_right++ ){
         for(int shift_up = -shifts; shift_up < shifts +1;shift_up++ ){
 
-            printf("add counts with shiftRight = %d and shiftUp = %d\n",shift_right,shift_up);
+            if (verbose) printf("add counts with shiftRight = %d and shiftUp = %d\n",shift_right,shift_up);
 
             float ****layered_images, **** temp;
             int d,s;
@@ -389,4 +411,17 @@ void saveKernelResponsesOfImageExperimental(ConvolutionalBayesianNetwork cbn, fl
     }
     freeImagesContinuos(before,d,size);
 
+}
+
+//the average probability of the nodes
+float probabilityState(ConvolutionalBayesianNetwork cbn){
+    float prob = 0;
+    BayesianNetwork bn;
+    int n_nodes = 0;
+    for (int i = 0; i < cbn->n_layers; i++){
+        bn = cbn->bayesianNetworks[i];
+        prob +=  bn->size * bn->size * bn->depth  * average_probability_nodes(bn);
+        n_nodes += bn->size * bn->size * bn->depth;
+    }
+    return prob / n_nodes;
 }

@@ -120,9 +120,10 @@ BayesianNetwork createBayesianNetwork(int size, int depth, int n_number_nodes, i
 }
 
 // copy+ies a bayesian networks (only size and structure, not counts, not_number_nodes)
-BayesianNetwork copyBayesianNetwork(BayesianNetwork original){
+BayesianNetwork copyBayesianNetwork(BayesianNetwork original, bool copy_counts_and_cpt){
     BayesianNetwork copy = createBayesianNetwork(original->size,original->depth,0,original->distanceRelation,original->diagonals);
 
+    int n_parent_states;
     Node n_original, n_copy, original_relative;
     for (int d = 0; d < original->depth; d++){
         for (int x = 0; x < original->size; x++){
@@ -144,6 +145,23 @@ BayesianNetwork copyBayesianNetwork(BayesianNetwork original){
                     n_copy->parents[i] = copy->nodes[original_relative->depth][original_relative->x][original_relative->y];
                 }
 
+                n_parent_states = (int)(pow(2,n_original->n_parents));
+                if (copy_counts_and_cpt && n_original->stateCountsTrue != NULL){
+                    n_copy->stateCountsTrue = malloc(sizeof(int) * n_parent_states);
+                    n_copy->stateCountsFalse = malloc(sizeof(int) * n_parent_states);
+                    for (int i = 0; i < n_parent_states; i++){
+                        n_copy->stateCountsTrue[i] = n_original->stateCountsTrue[i];
+                        n_copy->stateCountsFalse[i] = n_original->stateCountsFalse[i];
+                    }
+                }
+
+                if (copy_counts_and_cpt && n_original->CPT!= NULL){
+
+                    n_copy->CPT = malloc(sizeof(float) * n_parent_states);
+                    for (int i = 0; i < n_parent_states; i++){
+                        n_copy->CPT[i] = n_original->CPT[i];
+                    }
+                }
             }
         }
     }
@@ -478,6 +496,22 @@ void fitDataCountsOneLevel(BayesianNetwork bn, float **** data, int data_instanc
     }
     free(parentCombination );
     }
+}
+
+float ** layerActivationImage(BayesianNetwork bn, int depth){
+    if (bn->nodes[depth][0][0]->CPT == NULL){
+        printf("ERROR24354213: CPT not learned!");
+        exit(1);
+    }
+
+    float ** image = malloc(sizeof(int*) * bn->size);
+    for (int x =0; x < bn->size; x++){
+        image[x] = malloc(sizeof(int) * bn->size);
+        for (int y = 0; y < bn->size; y++){
+            image[x][y] = bn->nodes[depth][x][y]->CPT[0];
+        }
+    }
+    return image;
 }
 
 void fitDataCountsNumberNode(NumberNode nn, float **** data, int * nn_values, int n_data  ){
@@ -886,6 +920,24 @@ float average_probability_nodes(BayesianNetwork bn){
     return prob / (float)(bn->depth * bn->size * bn->size);
 }
 
+float logLikelihoodState(BayesianNetwork bn){
+    int i,j,k,l;
+    float prob = 0;
+    Node n;
+    for ( i = 0; i < bn->depth; i++){
+        for ( j = 0; j < bn->size; j++){
+            for ( k = 0; k < bn->size; k++){
+                n = bn->nodes[i][j][k];
+                if (n->CPT == NULL){
+                    printf("ERROR: CPTs do not seem to be learned");
+                    exit(1);
+                }
+                prob += log(probabilityGivenParents(n));
+            }
+        }
+    }
+    return prob;
+}
 
 
 

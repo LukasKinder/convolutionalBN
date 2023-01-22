@@ -19,6 +19,7 @@ plt.ylabel(" A(P(N|Rel.)) - Av(P(N|~Rel.))")
 
 plt.plot(proportion_white, label = "proprtion_white")
 plt.legend()
+plt.grid()
 plt.show()
 
 

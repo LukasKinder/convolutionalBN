@@ -588,7 +588,7 @@ void trainKernelsGradientDescent(ConvolutionalBayesianNetwork cbn, int layer, in
             int n_test_data = 500 < n_data ? 500 : n_data;
             float **** test_data = dataTransition(data_previous_layer,n_test_data,d,s,kernels,n_kernels,pooling_kernel);
 
-            BayesianNetwork bn_copy = copyBayesianNetwork(bn);
+            BayesianNetwork bn_copy = copyBayesianNetwork(bn,false);
             fitDataCounts(bn_copy,test_data,n_test_data); 
             for (int i = 0; i < bn_copy->n_numberNodes; i++){
                 fitDataCountsNumberNode(bn_copy->numberNodes[i],test_data,labels, n_test_data);
@@ -682,8 +682,8 @@ void kernelTrainingWhileUpdatingStructure(ConvolutionalBayesianNetwork cbn, int 
         for (int i  = 0; i < iterations / iterations_structure_update; i++){
 
             if (verbose) printf("Iteration %d of %d: REvise structure structure\n",i +1, iterations / iterations_structure_update);
-            addRandomStructure(cbn,layer,n_incoming_relations);
-            //optimizeStructure(cbn,layer,n_incoming_relations,images,labels,n_data,10,0.01,30,false);
+            //addRandomStructure(cbn,layer,n_incoming_relations);
+            optimizeStructure(cbn,layer,n_incoming_relations,images,labels,n_data,10,0.05,30,false);
 
             if(verbose) printf("gradient descent for %d iterations\n", iterations_structure_update);
             trainKernelsGradientDescent(cbn,layer,iterations_structure_update,iterations_update_counts,learning_rate,momentum,batchSize,images,labels,n_data,n_data_used_for_counts,true);

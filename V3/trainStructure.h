@@ -483,6 +483,8 @@ void optimizeStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incomi
     learnStructureConvolutionalNodes(bn,n_incoming_relations,layered_images,n_data,data_per_row_n);
     if (verbose) printf("OPTIMIZE STRUCTURE: Free images\n");
 
+    resetAllStateCounts(bn);
+
     freeLayeredImagesContinuos(layered_images,n_data,bn->depth,bn->size);
     if (verbose) printf("OPTIMIZE STRUCTURE: Done\n");
 }
@@ -575,6 +577,8 @@ void addRandomStructure(ConvolutionalBayesianNetwork cbn, int layer, int n_incom
             
         }
     }
+
+    resetAllStateCounts(bn);
 
     free(used_directions);
 }

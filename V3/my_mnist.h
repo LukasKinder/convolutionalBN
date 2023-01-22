@@ -44,6 +44,79 @@ void image_char2float(int num_data, unsigned char** data_image_char, float*** da
     }
 }
 
+float ** copyImage(float ** image, int size){
+    float ** copy = malloc(sizeof(float*) * size);
+    for (int i = 0; i < size; i++){
+        copy[i] = malloc(sizeof(float) * size);
+        for (int j = 0; j < size; j++){
+            copy[i][j] = image[i][j];
+        }
+    }
+    return copy;
+}
+
+void meanImage(float** image, int size, float *mean_x, float *mean_y){
+    *mean_x = 0;
+    *mean_y = 0;
+    float total = 0;
+
+    for (int x = 0; x < size; x++){
+        for (int y = 0; y < size; y++){
+            
+            *mean_x += x * image[x][y];
+            *mean_y += y * image[x][y];
+            total += image[x][y];
+        }
+    }
+    *mean_x /= total;
+    *mean_y /=total;
+}
+
+void shiftImageLeft(float ** image){
+    for (int x = 0; x < 28; x++){
+        for (int y = 0; y < 28; y++){
+            if (x+1 == 28){
+                image[x][y] = 0.0;
+            }else{
+                image[x][y] = image[x+1][y];
+            }
+        }
+    }
+}
+
+void shiftImageUp(float ** image){
+    for (int x = 0; x < 28; x++){
+        for (int y = 0; y < 28; y++){
+            if (y+1 == 28){
+                image[x][y] = 0.0;
+            }else{
+                image[x][y] = image[x][y+1];
+            }
+        }
+    }
+}
+
+void centerImages(float *** images, int num_data){
+    float ** temp = malloc(sizeof(float*) * 28);
+    for (int i = 0; i < 28; i++){
+        temp[i] = malloc(sizeof(float) * 28);
+    }
+
+    float mean_x, mean_y;
+    for (int i = 0; i < num_data; i++){
+        meanImage(images[i],28,&mean_x,&mean_y);
+        //printf("Before: mean positions = %f %f\n",mean_x,mean_y);
+        if (mean_x > 14.0){
+            shiftImageLeft(images[i]);
+        } 
+        if (mean_y > 14.0){
+            shiftImageUp(images[i]);
+        }
+        /* meanImage(images[i],28,&mean_x,&mean_y);
+        printf("After: mean positions = %f %f\n",mean_x,mean_y); */
+    }
+}
+
 float*** readImagesContinuos(char *file_path, int num_data){
 
     int info_arr[MNIST_LEN_INFO_IMAGE];
@@ -86,6 +159,8 @@ float*** readImagesContinuos(char *file_path, int num_data){
         free(data_char[i]);
     }
     free(data_char);
+
+    centerImages(images, num_data);
 
     return images;
 }
@@ -236,7 +311,7 @@ void saveImage(float ** image, int size, char name[], bool binary_representation
     } else strcpy(file_name, name);
 
     if ( (fp=fopen(file_name, "wb"))==NULL ) {
-        printf("could not open file\n");
+        printf("could not open file: %s\n", file_name);
         exit(1);
     }
 
