@@ -50,7 +50,8 @@ typedef struct RawBayesianNetwork {
     int n_numberNodes;
 
     float* learning_curve;
-    float * learning_proportion_white;
+    float ** learning_proportion_white;
+    int learning_proportion_white_n_channels;
     int learning_curve_size;
     int learning_curve_len;
 }RawBayesianNetwork;
@@ -113,7 +114,8 @@ BayesianNetwork createBayesianNetwork(int size, int depth, int n_number_nodes, i
     }
 
     bn->learning_curve = malloc(sizeof(float) * 1);
-    bn->learning_proportion_white = malloc(sizeof(float) * 1);
+    bn->learning_proportion_white = NULL;
+    bn->learning_proportion_white_n_channels = 0;
     bn->learning_curve_size = 0;
     bn->learning_curve_len = 1;
     return bn;
@@ -205,7 +207,13 @@ void freeNumberNode(NumberNode nn){
 void freeBayesianNetwork(BayesianNetwork bn){
     int i,j,k;
     free(bn->learning_curve);
-    free(bn->learning_proportion_white);
+
+    if (bn->learning_proportion_white != NULL){
+        for (int i = 0; i < bn->learning_proportion_white_n_channels; i++){
+            free(bn->learning_proportion_white[i]);
+        }
+        free(bn->learning_proportion_white);
+    }
     
 
     for (i = 0; i < bn->depth; i++){
@@ -241,7 +249,11 @@ void saveLearningCurve(BayesianNetwork bn, char *name){
     }
 
     for (int i = 0; i < bn->learning_curve_size; i++){
-        fprintf(fptr,"%f %f\n", bn->learning_curve[i], bn->learning_proportion_white[i]);
+        fprintf(fptr,"%f ", bn->learning_curve[i]);
+        for (int j = 0; j < bn->learning_proportion_white_n_channels; j++){
+            fprintf(fptr,"%f ", bn->learning_proportion_white[j][i]);
+        }
+        fprintf(fptr,"\n");
     }
 
     fclose(fptr);
@@ -462,7 +474,7 @@ void fitDataCountsOneLevel(BayesianNetwork bn, float **** data, int data_instanc
 
             n->stateCountsTrue = malloc(sizeof(int) * (int)(pow(2,n->n_parents)));
             n->stateCountsFalse = malloc(sizeof(int) * (int)(pow(2,n->n_parents)));   
-            for (int i = 0; i < pow(2,n->n_parents); i++){
+            for (int i = 0; i < (int)(pow(2,n->n_parents)); i++){
                 n->stateCountsTrue[i] = 0;
                 n->stateCountsFalse[i] = 0;
             }
@@ -485,12 +497,13 @@ void fitDataCountsOneLevel(BayesianNetwork bn, float **** data, int data_instanc
                     parentNode = n->parents[j];
                     parentCombination[j] = 0.5 <data[i][parentNode->depth][parentNode->x][parentNode->y];
                 }
-
+                printf("A\n");
                 if (0.5 < data[i][level][x][y]){
                     n->stateCountsTrue[ binaryToInt(parentCombination,n->n_parents)]++;
                 }else{
                     n->stateCountsFalse[ binaryToInt(parentCombination,n->n_parents)]++;
                 }
+                printf("B\n");
             }
         }
     }
@@ -1053,4 +1066,78 @@ void printBayesianNetwork(BayesianNetwork bn){
     printf("Likelihood of nodes give data   = %.0f\nLikelihood of node no relations = %.0f\nn_parameters nodes              = %d\n\nLikelihood nn of data           = %.0f\nLikelihood nn no relations      = %.0f\nn_parameters numbernodes        = %d\n",log_prob_data_relations,log_prob_data_no_relations,n_parameters_nodes,logLNumberNodes,logLNumberNodesNoRelations,n_parameters_nn);
 }
 
+float entropyCounts(int counts_x, int counts_y){
+    if (counts_x == 0 && counts_y == 0) return 0.5;
+    if (counts_x == 0 || counts_y == 0) return 0.0;
+
+    float x = (float)(counts_x) / (counts_x + counts_y);
+    float y = (float)(counts_y) / (counts_x + counts_y);
+
+    return -(x * log2(x) + y * log2(y));
+}
+
+//returns the weighted entropy for each row in the CPT
+float entropyCountsNode(Node n){
+    float entropy = 0;
+    int total = 0;
+    int n_rows = (int)(pow(2,n->n_parents));
+    int total_counts;
+    for (int i = 0; i < n_rows; i++){
+        entropy += entropyCounts(n->stateCountsTrue[i], n->stateCountsFalse[i]) * (n->stateCountsTrue[i] + n->stateCountsFalse[i]);
+        total += n->stateCountsTrue[i] + n->stateCountsFalse[i];
+    }
+    return entropy / total;
+}
+
+float averageEntropyCounts(BayesianNetwork bn){
+    float entropy = 0;
+
+    #pragma omp parallel for reduction(+ : entropy)
+    for (int d = 0; d < bn->depth; d++){
+        for (int x = 0; x < bn->size; x++){
+            for (int y  = 0; y < bn->size; y++){
+                entropy += entropyCountsNode(bn->nodes[d][x][y]);
+            }
+        }
+    }
+
+
+    return entropy / (bn->depth * bn->size * bn->size);
+}
+
+//returns the weighted entropy for each row in the CPT
+float entropyCountsNodeNoRelations(Node n){
+    int n_rows = (int)(pow(2,n->n_parents));
+    int n_true = 0;
+    int n_false = 0;
+    for (int i = 0; i < n_rows; i++){
+        n_true += n->stateCountsTrue[i];
+        n_false += n->stateCountsFalse[i];
+    }
+    return entropyCounts(n_true,n_false);
+}
+
+float averageEntropyCountsNoRelations(BayesianNetwork bn){
+    float entropy = 0;
+
+    #pragma omp parallel for reduction(+ : entropy)
+    for (int d = 0; d < bn->depth; d++){
+        for (int x = 0; x < bn->size; x++){
+            for (int y  = 0; y < bn->size; y++){
+                entropy += entropyCountsNodeNoRelations(bn->nodes[d][x][y]);
+
+
+/*                 if (entropyCountsNode(bn->nodes[d][x][y]) > entropyCountsNodeNoRelations(bn->nodes[d][x][y])){
+                    printf("with = %f, without = %f\n", entropyCountsNode(bn->nodes[d][x][y]), entropyCountsNodeNoRelations(bn->nodes[d][x][y]));
+                    printNode(bn->nodes[d][x][y],true);
+                    int X;
+                    scanf("%d",&X);
+                } */
+
+            }
+        }
+    }
+
+    return entropy / (bn->depth * bn->size * bn->size);
+}
 

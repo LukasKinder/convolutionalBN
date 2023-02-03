@@ -178,16 +178,17 @@ void addRelationChildParent(BayesianNetwork bn, int d_child, int position_parent
     for (int x = 0; x < bn->size; x++){
         for (int y = 0; y < bn->size; y++){
 
-            if (x + distance_vertically < 0 || y + distance_horizontally < 0
-                || x + distance_vertically >= bn->size || y + distance_horizontally >= bn->size) continue; //can not add relations
+            if (x + distance_horizontally < 0 || y + distance_vertically < 0
+                || x + distance_horizontally >= bn->size || y + distance_vertically >= bn->size) continue; //can not add relations
 
             child = bn->nodes[d_child][x][y];
-            parent = bn->nodes[d_parent][x + distance_vertically][y + distance_horizontally];
             if (child->parents == NULL){
+
                 printf("Error: parent array of node is NULL\n");
                 exit(1);
             }
 
+            parent = bn->nodes[d_parent][x + distance_horizontally][y + distance_vertically];
             child->parents[child->n_parents] = parent;
             (child->n_parents)++;
 
@@ -237,14 +238,14 @@ void removeLastRelationChildParent(BayesianNetwork bn, int d_child, int position
     for (int x = 0; x < bn->size; x++){
         for (int y = 0; y < bn->size; y++){
 
-            if (x + distance_vertically < 0 || y + distance_horizontally < 0
-                || x + distance_vertically >= bn->size || y + distance_horizontally >= bn->size) continue; 
+            if (x + distance_horizontally< 0 || y + distance_vertically < 0
+                || x + distance_horizontally >= bn->size || y + distance_vertically >= bn->size) continue; 
 
             child = bn->nodes[d_child][x][y];
             (child->n_parents)--;
 
             if (remove_child_relation){
-                parent = bn->nodes[d_parent][x + distance_vertically][y + distance_horizontally];
+                parent = bn->nodes[d_parent][x + distance_horizontally][y + distance_vertically];
                 (parent->n_children)--;
             }
         }
@@ -290,7 +291,8 @@ bool optimizeStructureUsingStructureHeuristic(BayesianNetwork bn,  float **** da
                     exit(1);
                 }
 
-                if (heuristics[d][n_relation][direction] < best_heuristic){
+                if (heuristics[d][n_relation][direction] < best_heuristic 
+                        || (heuristics[d][n_relation][direction] == best_heuristic && rand() % 10 == 0)){
                     best_heuristic = heuristics[d][n_relation][direction];
                     best_relation_direction = direction;
                 }
@@ -309,6 +311,48 @@ bool optimizeStructureUsingStructureHeuristic(BayesianNetwork bn,  float **** da
     
     }
 
+}
+
+void updateStructureHeuristicNewKernel(float *** structure_heuristic,int depth, int n_relations, int diagonal, int kernel, bool verbose){
+    int n_directions_relations = diagonal ? 4  * depth : 2 * depth; 
+    float bestHeuristic, current;
+    int best_index;
+    bool best_was_updated;
+
+    int n_to_zero = 0;
+
+    for (int d = 0; d < depth; d++){
+
+        best_was_updated = false;
+        for (int n_relation = 0; n_relation < n_relations; n_relation++){
+
+            if (! best_was_updated){
+                bestHeuristic = 1000000000;
+                for (int direction =0; direction < n_directions_relations; direction++){
+                    current  = structure_heuristic[d][n_relation][direction];
+                    if (current < bestHeuristic){
+                        bestHeuristic = current;
+                        best_index = direction;
+                    }
+                }
+            }
+            
+            for (int direction = 0; direction < n_directions_relations; direction++){
+                if (best_was_updated || direction % depth == kernel){
+                    structure_heuristic[d][n_relation][direction] = 0.0;
+                    n_to_zero++;
+                }
+            }
+
+            if (! best_was_updated){
+                //check if the best was updated, in this case, everything must be reset from now one
+                if (best_index  % depth == kernel){
+                    //conecutive n_relatiosn need a full reset
+                    best_was_updated = true;
+                }
+            }
+        }
+    }
 }
 
 float *** initStructureHeuristic(int depth, int n_relations, int diagonal){
@@ -357,6 +401,8 @@ int  updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
     int  n_directions_relations = bn->diagonals ? 4  * bn->depth : 2 * bn->depth;
     int n_updates = 0;
 
+    Node nnn;
+
 
     #pragma omp parallel for
     for (int d = 0; d < bn->depth; d++){
@@ -366,12 +412,11 @@ int  updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
         bool best_is_new, best_is_new_current;
         int * existing_relations = malloc(sizeof(int) * n_relations);
         bool already_exists_flag, is_new_flag;
-        BayesianNetwork bn_copy;
         int data_used;
 
         if (verbose) printf("Updating for depth %d\n",d);
 
-        bn_copy = createBayesianNetwork(bn->size,bn->depth,0,bn->distanceRelation,bn->diagonals);
+        BayesianNetwork bn_copy = createBayesianNetwork(bn->size,bn->depth,0,bn->distanceRelation,bn->diagonals);
         for(int x = 0; x < bn_copy->size; x++){
             for(int y = 0; y < bn_copy->size; y++){
                 bn_copy->nodes[d][x][y]->parents = malloc(sizeof(Node) * n_relations);
@@ -416,6 +461,8 @@ int  updateStructureHeuristics(float *** structureHeuristic,int n_relations,  Ba
                     current = bicOneLevel(bn_copy, data,data_used,d,false);
                     structureHeuristic[d][n_relation][direction] = current;
                     removeLastRelationChildParent(bn_copy,d,direction,false);
+
+                    if (verbose) printf("Done with update\n");
 
                     is_new_flag = true;
                     n_updates++;

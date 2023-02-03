@@ -342,16 +342,18 @@ void saveKernelResponsesOfImage(ConvolutionalBayesianNetwork cbn, float ** image
         after_pooling = applyMaxPooling(after_transitional,size,cbn->poolingKernels[l]);
         freeImagesContinuos(after_transitional,d,size);
         size = sizeAfterConvolution(size,cbn->poolingKernels[l]);
+        
+        if (l == cbn->n_layers -1){
+            for (int i = 0; i < d; i++){
+                name[31] = (char)(l / 10 + '0');
+                name[32] = (char)((l % 10)+ '0');
 
-        for (int i = 0; i < d; i++){
-            name[31] = (char)(l / 10 + '0');
-            name[32] = (char)((l % 10)+ '0');
+                name[40] = (char)(i / 10 + '0');
+                name[41] = (char)((i % 10) + '0');
 
-            name[40] = (char)(i / 10 + '0');
-            name[41] = (char)((i % 10) + '0');
-
-            printf("save %s\n",name);
-            saveImage(after_pooling[i],size,name,true);
+                printf("save %s\n",name);
+                saveImage(after_pooling[i],size,name,true);
+            }
         }
 
         before = after_pooling;

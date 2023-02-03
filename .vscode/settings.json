@@ -8,9 +8,12 @@
         "bayesiannetwork.h": "c",
         "convolution.h": "c",
         "trainnumbernodes.h": "c",
-        "trainstructure.h": "c"
+        "trainstructure.h": "c",
+        "pretrainkernels.h": "c",
+        "trainkernels.h": "c"
     },
     "cSpell.words": [
+        "anova",
         "Supersmalls"
     ]
 }

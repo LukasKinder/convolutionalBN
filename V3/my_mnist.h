@@ -97,10 +97,6 @@ void shiftImageUp(float ** image){
 }
 
 void centerImages(float *** images, int num_data){
-    float ** temp = malloc(sizeof(float*) * 28);
-    for (int i = 0; i < 28; i++){
-        temp[i] = malloc(sizeof(float) * 28);
-    }
 
     float mean_x, mean_y;
     for (int i = 0; i < num_data; i++){

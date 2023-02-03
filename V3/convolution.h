@@ -2,8 +2,8 @@
 #define PROMISING_KERNEL_MEAN_MIN 0.005
 #define PROMISING_KERNEL_MEAN_MAX 0.3 //should not be super high, because of max pooling
 
-float sigmoid(float x){
-    return 1 / (1 + exp(- 10 *x));
+float sigmoid(float x, float steepness){
+    return 1 / (1 + exp(- steepness *x));
 }
 
 typedef enum KernelType {
@@ -198,7 +198,7 @@ float ** applyConvolutionWeighted(float*** data, int data_size_x, int data_size_
 
             new_data[x][y] = sum + kernel.bias;
             if (apply_sigmoid){
-                new_data[x][y] = sigmoid(new_data[x][y]);
+                new_data[x][y] = sigmoid(new_data[x][y],1.0);
             } 
         }
     }
@@ -215,7 +215,11 @@ void dataTransitionSubset(float **** dataPrevious, int n_data, int depth, int si
     #pragma omp parallel for private(random_index, temp)
     for (int  i = 0; i < subset_size; i++){
         subset_data[i] = malloc(sizeof(float **) * n_kernels);
-        random_index = rand() % n_data;
+        if (subset_size == n_data){
+            random_index = i;
+        }else{
+            random_index = rand() % n_data;
+        }
         subset_labels[i] = labels[random_index];
 
         #pragma omp parallel for
@@ -332,4 +336,66 @@ float proportionWhiteLayer(float **** data, int n_data, int layer, int size){
         }
     }
     return proportion / (n_data * size * size);
+}
+
+void writeKernelResponsesToFile(Kernel ** kernels, int * n_kernels, Kernel * poolingKernels, int n_layers, int * labels, float *** images
+        , int n_data, char * file_name, bool continuous){
+
+    char save_path[255] = "kernelTransformations/";
+    strncat(save_path,file_name, strlen(file_name) );
+    FILE *fptr;
+    fptr = fopen(save_path,"w");
+    if(fptr == NULL){
+        printf("Error!");   
+        exit(1);             
+    }
+
+    float **** layered_images = imagesToLayeredImagesContinuos(images,n_data,28);
+    float *** higher_representation;
+    float *** temp;
+    int d, s,s_after_weighted;
+    for (int i = 0; i < n_data; i++){
+        d = 1;
+        s = 28;
+        fprintf(fptr,"%d\n",labels[i]);
+
+        higher_representation = layered_images[i];
+
+        for (int l = 0; l < n_layers; l++){
+            temp = malloc(sizeof(float**) * n_kernels[l]);
+            #pragma omp parallel for
+            for (int j = 0; j < n_kernels[l]; j++){
+                temp[j] = applyConvolutionWeighted(higher_representation,s,s,kernels[l][j],true);
+            }
+            if (l != 0) freeImagesContinuos(higher_representation,d,s);
+            d = n_kernels[l];
+            s_after_weighted = sizeAfterConvolution(s,kernels[l][0]);
+
+            higher_representation = applyMaxPooling(temp,s_after_weighted,poolingKernels[l]);
+            s = sizeAfterConvolution(s_after_weighted,poolingKernels[l]);
+
+            if (l == n_layers -1) {
+                for (int depth = 0; depth < d; depth ++){
+                    for (int x = 0; x < s; x++){
+                        for (int y =0; y < s; y++){
+                            if (continuous){
+                                fprintf(fptr,"%.2f ", higher_representation[depth][x][y] );
+                            }else {
+                                fprintf(fptr,"%d ", higher_representation[depth][x][y] > 0.5 ? 1 : 0);
+                            }
+                        }
+                    }
+                }
+            }
+
+            freeImagesContinuos(temp,d,s_after_weighted);
+        }
+        freeImagesContinuos(higher_representation,d,s);
+
+        fprintf(fptr,"\n");
+    }
+    
+    fclose(fptr);
+
+    freeLayeredImagesContinuos(layered_images,n_data,1,28);
 }

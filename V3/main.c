@@ -8,13 +8,15 @@
 #include "bayesianNetwork.h"
 #include "convolutionalBayesianNetwork.h"
 #include "trainStructure.h"
+#include "pretrain_kernels.h"
 #include "trainKernels.h"
 #include "performance_measure.h"
 #include "inference.h"
 
-#define TRAINING_SIZE 6000
+#define TRAINING_SIZE 1000
+#define TEST_SIZE 1000
 #define N_NUMBER_NODES 0
-#define N_INCOMING_RELATIONS 8
+#define N_INCOMING_RELATIONS 3
 
 #define TRAIN_IMAGE_PATH "./data/train-images.idx3-ubyte"
 #define TRAIN_Label_PATH "./data/train-labels.idx1-ubyte"
@@ -22,59 +24,91 @@
 #define TEST_IMAGE_PATH "./data/t10k-images.idx3-ubyte"
 #define TEST_Label_PATH "./data/t10k-labels.idx1-ubyte"
 
-#define KERNEL_SEARCH_ITERATIONS 3000
-#define COUNTS_UPDATE 300
-#define STRUCTURE_UPDATE 1000
-#define BATCH_SIZE 30
+#define KERNEL_SEARCH_N_COUNTS_UPDATE 500
+#define KERNEL_SEARCH_ITERATIONS 100
+#define COUNTS_UPDATE 5
+#define STRUCTURE_UPDATE 100
+#define BATCH_SIZE 100
 
-#define LEARNING_RATE 0.0002
+#define LEARNING_RATE 0.03
 #define MOMENTUM 0.5
+
+/* TODO 
+Gradient of each kernel gets normalized individually
+take care of proportion white 
+Investigate uniform shift, and why still outgoing relations*/
 
 int main(void){
 
-    srand(33);
+    srand(5);
 
     float *** images = readImagesContinuos(TRAIN_IMAGE_PATH,TRAINING_SIZE);
     int * labels = readLabels(TRAIN_Label_PATH, TRAINING_SIZE);
 
     ConvolutionalBayesianNetwork cbn = createConvolutionalBayesianNetwork(2);
 
+
+    /* addLayerToCbn(cbn,1,1,1, N_NUMBER_NODES ,4,true);
+    initKernels(cbn,0,images,20,false);
+    cbn->transitionalKernels[0][0].weights[0][0][0] = 1;
+    cbn->transitionalKernels[0][0].bias = 0; */
+
+
     //layer 1
-    addLayerToCbn(cbn,10,3,2, N_NUMBER_NODES ,4,true);
-    addLayerToCbn(cbn,10,3,2, N_NUMBER_NODES ,7,true);
+    addLayerToCbn(cbn,10,3,2, N_NUMBER_NODES ,2,true);
+    addLayerToCbn(cbn,10,3,2, N_NUMBER_NODES ,16,true);
 
     //initKernels(cbn,0,images,20,false);
 
-    //loadKernels(cbn->transitionalKernels[0], cbn->n_kernels[0],"hardcoded_layer1_n10_d1_s2");
-    loadKernels(cbn->transitionalKernels[0], cbn->n_kernels[0],"layer1_n10_d1_s3");
-    loadKernels(cbn->transitionalKernels[1], cbn->n_kernels[1],"layer2_n10_d10_s3");
-    //loadKernels(cbn->transitionalKernels[2], cbn->n_kernels[2],"layer3_n20_d10_s2");
-    
-    /*loadKernels(cbn->transitionalKernels[2], cbn->n_kernels[2],"layer3_n10_d10_s3"); */
-    
+    loadKernels(cbn->transitionalKernels[0], cbn->n_kernels[0],"overlapping_l0_n10_s3");
+    //loadKernels(cbn->transitionalKernels[1],cbn->n_kernels[1],"overlapping_l1_n10_s3");
 
-    /* saveKernelResponsesOfImage(cbn, images[0], "before");
+    repeatedly_replace_worse_kernels(cbn,1,images,TRAINING_SIZE,N_INCOMING_RELATIONS,30, true);
 
-    kernelTrainingWhileUpdatingStructure(cbn,2,KERNEL_SEARCH_ITERATIONS,COUNTS_UPDATE,STRUCTURE_UPDATE
-            ,LEARNING_RATE,MOMENTUM,BATCH_SIZE,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,TRAINING_SIZE,false); */
 
-    //printKernel(cbn->transitionalKernels[0][0]);
 
-    //saveLearningCurve(cbn->bayesianNetworks[2], "firstExperiment");
-
-    //saveKernelResponsesOfImage(cbn, images[0], "after");
-    /* saveKernelResponsesOfImage(cbn, images[1], "after1");
-    saveKernelResponsesOfImage(cbn, images[2], "after2");
-    saveKernelResponsesOfImage(cbn, images[3], "after3"); */
-
-    //saveKernels(cbn->transitionalKernels[2],20,"layer3_n20_d10_s2");
-
+    /* float *** test_images = readImagesContinuos(TEST_IMAGE_PATH,TEST_SIZE);
+    int * test_labels = readLabels(TEST_Label_PATH, TEST_SIZE);
+    writeKernelResponsesToFile(cbn->transitionalKernels,cbn->n_kernels,cbn->poolingKernels,cbn->n_layers,labels,images,TRAINING_SIZE, "10000_two_kernels_Train",false);
+    writeKernelResponsesToFile(cbn->transitionalKernels,cbn->n_kernels,cbn->poolingKernels,cbn->n_layers,test_labels,test_images,TEST_SIZE, "10000_two_kernels_Test",false); */
 
     /* free(labels);
     freeImagesContinuos(images,TRAINING_SIZE,28);
     freeConvolutionalBayesianNetwork(cbn);
 
-    return 0;  */
+    return 0;  */ 
+    
+    /*loadKernels(cbn->transitionalKernels[2], cbn->n_kernels[2],"layer3_n10_d10_s3"); */
+    
+
+    /*saveKernelResponsesOfImage(cbn, images[0], "before");
+    saveKernelResponsesOfImage(cbn, images[1], "before1");
+    saveKernelResponsesOfImage(cbn, images[2], "before2");
+    saveKernelResponsesOfImage(cbn, images[3], "before3");
+    saveKernelResponsesOfImage(cbn, images[4], "before4"); */
+
+    saveKernels(cbn->transitionalKernels[1],cbn->n_kernels[1],"overlapping_l1_n10_s3_before");
+
+    kernelTrainingWhileUpdatingStructure(cbn,1,KERNEL_SEARCH_ITERATIONS,COUNTS_UPDATE,STRUCTURE_UPDATE
+            ,LEARNING_RATE,MOMENTUM,BATCH_SIZE,images,labels,TRAINING_SIZE,N_INCOMING_RELATIONS,KERNEL_SEARCH_N_COUNTS_UPDATE,true);
+
+    //printKernel(cbn->transitionalKernels[0][0]);
+
+    saveLearningCurve(cbn->bayesianNetworks[1], "firstExperiment");
+
+    saveKernelResponsesOfImage(cbn, images[0], "after");
+/*     saveKernelResponsesOfImage(cbn, images[1], "after1");
+    saveKernelResponsesOfImage(cbn, images[2], "after2");
+    saveKernelResponsesOfImage(cbn, images[3], "after3");
+    saveKernelResponsesOfImage(cbn, images[4], "after4"); */
+
+    saveKernels(cbn->transitionalKernels[1],cbn->n_kernels[1],"overlapping_l1_n10_s3");
+
+    free(labels);
+    freeImagesContinuos(images,TRAINING_SIZE,28);
+    freeConvolutionalBayesianNetwork(cbn);
+    return 0;
+
 
     printf("optimize structure layer 0\n");
     optimizeStructure(cbn,0,N_INCOMING_RELATIONS,images,labels,TRAINING_SIZE,10,0.005,50,true); 
