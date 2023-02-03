@@ -5,8 +5,8 @@
 
 #include "my_mnist.h"
 #include "convolution.h"
-#include "bayesianNetwork.h"
-#include "convolutionalBayesianNetwork.h"
+#include "perceptron_grid.h"
+#include "convolutionalPerceptronModel.h"
 #include "trainStructure.h"
 #include "pretrain_kernels.h"
 #include "trainKernels.h"
